@@ -13,6 +13,7 @@ function run() {
   echo "Testing ${label}..."
   time python3 gps_headless.py test/${d}/project.json >& test/${label}.log
   mv test/${d}/GPS/**/chem.cti test/${label}.cti
+  cp -r test/test_inputs test/test_inputs_${label}
 }
 
 unset GPS_CANTERA
