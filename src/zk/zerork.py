@@ -10,6 +10,7 @@ import time
 import tempfile
 import subprocess
 import shutil
+from flamesolver import *
 
 BASE_YML="""
 mechFile: {MECHDIR}/chem.inp
@@ -69,6 +70,48 @@ use_equilibrium_for_initialization: n
 ignition_temperature: 2500
 """
 
+BASE_PREMIX_YML="""
+mech_file: {MECHDIR}/chem.inp
+therm_file: {MECHDIR}/therm.dat
+trans_file: {MECHDIR}/trans.dat
+log_file: {CKFILE}
+transport_model: 'ConstantLewis'
+inlet_fuel_comp: {{ {FUEL_FRACS} }}
+inlet_oxidizer_comp: {{ {OXID_FRACS} }}
+inlet_full_comp: {{ {FULL_FRACS} }}
+track_max: [ {TRACK_SPECIES} ]
+initial_comp: {{ {OXID_FRACS} }}
+pressure: {PRES}
+inlet_temperature: {TEMP}
+inlet_phi: {PHI}
+
+#Overwritten by flamesolver driver
+Lewis_file: Lewis_file
+grid_file: grid_file
+restart_file: data_new
+convective_scheme_type: 2
+step_limiter : 1e+300
+simulation_type : 1
+ignition_temperature : 3200
+max_time: 0.002459115085349798
+stats_dt: 2e-06
+field_dt_multiplier: 55
+inlet_velocity: 0.41166172
+nusselt: 0.0
+store_jacobian: y
+num_off_diagonals: 0
+max_internal_dt: 1.0e-6
+max_steps: 10000
+max_subiter: 10
+num_points: 64
+rel_tol: 1e-08
+abs_tol: 1.0e-20
+ref_temperature: 1000.0
+use_equilibrium_for_init: y
+write_step_rates_to_field_files: y
+write_mole_fractions_to_field_files: y
+"""
+
 ZERORK_HOME=os.getenv("ZERORK_HOME", default='/usr/apps/advcomb')
 ZERORK_EXE=os.path.join(ZERORK_HOME, "bin", "constVolumeWSR.x")
 ZERORK_PSR_EXE=os.path.join(ZERORK_HOME, "bin", "constVolumePSR.x")
@@ -111,7 +154,7 @@ def read_zerork_outfile(zerork_out):
             try:
                 vals = list(map(float,line.split()))
             except Exception as e:
-                raise e
+                continue
             if(len(vals) < 8): continue
 
             raw['axis0'].append(vals[1])
@@ -134,6 +177,64 @@ def read_zerork_outfile(zerork_out):
     raw['mole_fraction'] = np.matrix(raw['mole_fraction'])
 
     return raw
+
+def read_zerork_flame_restart(restart_file, grid_file):
+    raw = dict()
+    raw['axis0'] = []
+    raw['axis0_type'] = 'distance'
+    #raw['pressure'] = []
+    raw['temperature'] = []
+    #raw['volume'] = []
+    raw['mole_fraction'] = []
+    raw['net_reaction_rate'] = []
+    #raw['mole'] = []
+    #raw['heat_release'] = []
+    #raw['heat_release_rate'] = []
+
+    Y, field_names, grid = read_restart(restart_file, grid_file)
+    nsp = 0
+    nrxn = 0
+    for i, field_name in enumerate(field_names):
+        if(field_name == "Temperature"):
+            raw['temperature'] = Y[i, :]
+        elif(field_name[0:12] == 'MoleFraction'):
+            nsp += 1
+        elif(nsp > 0 and 'NetProductionRate' not in field_name):
+            nrxn += 1
+        elif('NetProductionRate' in field_name):
+            break
+
+
+    start_mole_fractions=nsp+2
+    start_net_rates = start_mole_fractions+nsp
+    end_net_rates = start_net_rates+nrxn
+
+    raw['axis0'] = grid
+    raw['mole_fraction'] = Y[start_mole_fractions:start_net_rates, :].T
+
+    i = start_net_rates
+    while i < end_net_rates:
+        field_name=field_names[i]
+        net_rop = Y[i,:]
+        reversible = False
+        if("<=>" in field_name):
+            reversible = True
+        elif("=>" in field_name):
+            reversible = False
+        elif("=" in field_name):
+            reversible = True
+        i+=1
+        if(reversible):
+            net_rop -= Y[i,:]
+            i+=1
+        raw['net_reaction_rate'].append(net_rop)
+
+
+    raw['net_reaction_rate'] = np.matrix(raw['net_reaction_rate']).T * 1.0e3 #convert to mol/m^3/s
+    raw['mole_fraction'] = np.matrix(raw['mole_fraction'])
+
+    return raw
+
 
 def zerork(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names, rxn_equations, is_fine=False, dir_raw=None):
     cpu0 = time.time()
@@ -242,7 +343,7 @@ def zerork_psr(dir_desk, tau, p, T0, fuel_fracs, oxid_fracs, phi, species_names,
     trace_fracs_str = ',\n'.join([f'"{sp}": 0' for sp in other_species])
     full_fracs_str = ""
     if(full_fracs is not None):
-        full_fracs_str = ',\n'.join(['"{k}": {v}' for k,v in full_fracs.items()])
+        full_fracs_str = ',\n'.join([f'"{k}": {v}' for k,v in full_fracs.items()])
 
     #Write zero-rk input file
     error_return = False
@@ -337,7 +438,11 @@ def zerork_S_curve(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names
 
     while True:
         print(f'tau: phi={phi} at {atm} atm and {T0} K : {tau}, {tau_r}')
-        raw = zerork_psr(dir_desk, tau, p, T0, fuel_fracs, oxid_fracs, phi, species_names, rxn_equations)
+        full_fracs=None
+        #if(raw_burn):
+        #    full_fracs = { x[0]: x[1] for x in zip(species_names, np.ravel(raw_burn['mole_fraction'][-1,:])) }
+
+        raw = zerork_psr(dir_desk, tau, p, T0, fuel_fracs, oxid_fracs, phi, species_names, rxn_equations, full_fracs=full_fracs)
         if raw is None:
             T = T0
         else: 
@@ -395,6 +500,130 @@ def zerork_S_curve(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names
     save_raw_csv(raw_burn, species_names, rxn_equations, dir_raw)
 
     return raw
+
+def zerork_premix(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names, rxn_equations, eps=0.005, dir_raw=None):
+    cpu0 = time.time()
+
+    print('>'*30)
+    print('zerork premix for phi='+ str(phi) + ' at '+ str(atm)+'atm' + ' and '+str(T0)+'K')
+    print('<'*30)
+    
+    if len(species_names) > 100:
+        verbose = True
+    else:
+        verbose = False
+
+    p = ct.one_atm * atm
+
+    fuel_fracs_str = ','.join([f'"{k}": ' + str(v) for k,v in fuel_fracs.items()])
+    oxid_fracs_str = ','.join([f'"{k}": ' + str(v) for k,v in oxid_fracs.items()])
+
+    other_species = []
+    for sp in species_names:
+        if sp not in fuel_fracs and sp not in oxid_fracs:
+            other_species.append(sp)
+
+    track_species_str = ',\n'.join([f'{sp}' for sp in other_species])
+
+    full_fracs_str = ""
+    #if(full_fracs is not None):
+    #    full_fracs_str = ',\n'.join([f'"{k}": {v}' for k,v in full_fracs.items()])
+
+    #Write zero-rk input file
+    error_return = False
+    try:
+        tmpdir = tempfile.mkdtemp(dir=dir_desk)
+        zerork_infile_name = os.path.join(tmpdir,'zerork.yml')
+        with open(zerork_infile_name,'w') as infile:
+            infile.write(BASE_PREMIX_YML.format(
+                MECHDIR=os.path.join(dir_desk, 'mech'),
+                CKFILE=os.path.join(tmpdir,'zerork.cklog'),
+                TEMP=T0,
+                PRES=p,
+                PHI=phi,
+                OXID_FRACS=oxid_fracs_str,
+                FUEL_FRACS=fuel_fracs_str,
+                TRACK_SPECIES=track_species_str,
+                FULL_FRACS=full_fracs_str))
+
+        zerork_out=[]
+        env = dict(os.environ)
+        env["ZERORK_SPLIT_REVERSIBLE_REACTIONS"] = str(1)
+        try:
+            min_pts_per_lF = 12
+            steady = False
+            nprocs = 4
+            nnodes = 1
+            cwd = os.getcwd()
+            os.chdir(tmpdir)
+            #Run flame solver
+            compute_unsteady_flame_speeds(zerork_infile_name, [phi], [T0],
+                              [p], [0], nprocs, nnodes, min_pts_per_lF, steady, nprocs_steady=2, mpiexec='srun')
+            #Read in data
+            newest = max(glob.iglob('data*'), key=os.path.getctime)
+            raw = read_zerork_flame_restart(newest, 'grid_file')
+
+            os.chdir(cwd)
+            shutil.rmtree(tmpdir)
+
+        except subprocess.CalledProcessError as e:
+            zerork_out_file=open(os.path.join(tmpdir,'zerork.out'),'a')
+            zerork_out_file.write('!!! Running ZeroRK !!!\n')
+            zerork_out_file.write('!!! Warning: ZeroRK exited with non-zero output ({}).\n'.format(e.returncode))
+            zerork_out=e.output.split('\n')
+            error_return = True
+
+            for line in zerork_out:
+                zerork_out_file.write(line+'\n')
+
+            zerork_out_file.close()
+
+    #Clean up
+    finally:
+        pass
+        #shutil.rmtree(tmpdir)
+
+    #if(error_return or len(raw['axis0']) == 0):
+    #    print(f"Zero-rk failed: {p}, {T0}, {phi}")
+    #    raise ValueError
+    resample = False
+    if(resample):
+        prev_point = raw['mole_fraction'][0, :]
+        x = raw['axis0']
+        resample_x = [x[0]]
+        for i, xi in enumerate(x[1:]):
+            point  = raw['mole_fraction'][i+1, :]
+            diff = np.max(abs(point-prev_point)/(abs(point) + 1.0e-12))
+            if(diff > 1.0e-1):
+                resample_x.append(xi)
+            prev_point = point
+
+        resample_x = np.array(resample_x)
+        for key in ['temperature']:
+            out = np.interp(resample_x, raw['axis0'], raw[key])
+            raw[key] = out
+        for key in ['net_reaction_rate', 'mole_fraction']:
+            new_mat = np.zeros( (resample_x.shape[0], raw[key].shape[1]) )
+            for col in range(raw[key].shape[1]):
+                new_mat[:,col] = np.interp(resample_x,
+                                           raw['axis0'],
+                                           raw[key][:,col].flat)
+            raw[key] = new_mat
+        raw['axis0'] = resample_x
+
+    if(raw):
+        print('n_points = ' + str(len(raw['axis0'])))
+        if dir_raw is not None:
+            path_raw = os.path.join(dir_raw,'raw.npz')
+            raw = save_raw_npz(raw, path_raw)
+            save_raw_csv(raw, species_names, rxn_equations, dir_raw)
+    else:
+        print("No data from Zero-RK")
+
+
+    print('CPU time = '+str(time.time() - cpu0))
+    return raw
+
 
 if __name__=="__main__":
     pass

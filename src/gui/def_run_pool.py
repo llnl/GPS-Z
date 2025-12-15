@@ -16,7 +16,7 @@ from PyQt5.QtCore import *
 from src.core.def_tools import *
 from src.ct.def_ct_tools import Xstr
 from src.ct.senkin import senkin
-from src.zk.zerork import zerork, zerork_S_curve
+from src.zk.zerork import zerork, zerork_S_curve, zerork_premix
 from src.ct.psr import S_curve
 from src.ck.def_cheminp import skeletal
 from src.ct.ck2cti_GPS import ck2cti
@@ -183,6 +183,9 @@ def find_raw(soln, soln_in, dir_desk, fuel, \
             senkin(soln, atm, T0, X0, if_half=False, dir_raw=dir_raw, if_fine=False)
         elif reactor == 'PSR extinction':
             S_curve(soln_in, soln, atm, T0, X0, dir_raw=dir_raw)
+        elif reactor == 'Premix':
+            raise RuntimeError("Premix not supported when using Cantera")
+            
     else:
         if 'autoignition' in reactor:
             is_fine=False
@@ -194,6 +197,9 @@ def find_raw(soln, soln_in, dir_desk, fuel, \
                    is_fine=is_fine)
         elif reactor == 'PSR extinction':
             zerork_S_curve(dir_desk, atm, T0, fuel['composition'], oxid['composition'], phi,
+                   soln.species_names, soln.reaction_equations(), dir_raw=dir_raw)
+        elif reactor == 'Premix':
+            zerork_premix(dir_desk, atm, T0, fuel['composition'], oxid['composition'], phi,
                    soln.species_names, soln.reaction_equations(), dir_raw=dir_raw)
 
 

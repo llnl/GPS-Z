@@ -242,7 +242,8 @@ def save_raw_npz(raw0, path_raw):
 
 def save_raw_csv(raw, species_names, reaction_equations, dir_csv):
 	np.savetxt(os.path.join(dir_csv,str(raw['axis0_type'])+'.csv'), raw['axis0'])
-	np.savetxt(os.path.join(dir_csv,'pressure.csv'), raw['pressure'])
+	if 'pressure' in raw.keys():
+ 		np.savetxt(os.path.join(dir_csv,'pressure.csv'), raw['pressure'])
 	np.savetxt(os.path.join(dir_csv,'temperature.csv'), raw['temperature'])
 	np.savetxt(os.path.join(dir_csv,'mole_fraction.csv'), raw['mole_fraction'], delimiter=',')
 	np.savetxt(os.path.join(dir_csv,'net_reaction_rate.csv'), raw['net_reaction_rate'], delimiter=',')
