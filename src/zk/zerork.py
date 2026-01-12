@@ -79,7 +79,7 @@ transport_model: 'ConstantLewis'
 inlet_fuel_comp: {{ {FUEL_FRACS} }}
 inlet_oxidizer_comp: {{ {OXID_FRACS} }}
 inlet_full_comp: {{ {FULL_FRACS} }}
-track_max: [ {TRACK_SPECIES} ]
+track_max: [ ]
 initial_comp: {{ {OXID_FRACS} }}
 pressure: {PRES}
 inlet_temperature: {TEMP}
@@ -518,13 +518,6 @@ def zerork_premix(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names,
     fuel_fracs_str = ','.join([f'"{k}": ' + str(v) for k,v in fuel_fracs.items()])
     oxid_fracs_str = ','.join([f'"{k}": ' + str(v) for k,v in oxid_fracs.items()])
 
-    other_species = []
-    for sp in species_names:
-        if sp not in fuel_fracs and sp not in oxid_fracs:
-            other_species.append(sp)
-
-    track_species_str = ',\n'.join([f'{sp}' for sp in other_species])
-
     full_fracs_str = ""
     #if(full_fracs is not None):
     #    full_fracs_str = ',\n'.join([f'"{k}": {v}' for k,v in full_fracs.items()])
@@ -543,7 +536,6 @@ def zerork_premix(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names,
                 PHI=phi,
                 OXID_FRACS=oxid_fracs_str,
                 FUEL_FRACS=fuel_fracs_str,
-                TRACK_SPECIES=track_species_str,
                 FULL_FRACS=full_fracs_str))
 
         zerork_out=[]
