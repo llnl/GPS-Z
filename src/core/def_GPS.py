@@ -108,7 +108,8 @@ def GPS_algo(soln, flux_graph, source, target, path_save=None, \
     if not, then compute, save, and return
     -------------------------------- """
 
-    print('performing GPS: '+str(path_save))
+    if path_save is not None:
+        print('performing GPS: '+str(path_save))
 
     arrow = ' --> '
     global_path = {}
