@@ -122,8 +122,9 @@ def build_flux_graph(soln, raw, traced_element, path_save=None, overwrite=False,
 	# -------------------------------------
 	# save the graph using json, which is fast, and human-readable
 
-	data = json_graph.node_link_data(flux_graph)
-	json.dump(data, open(path_save, 'w'))
-	#print 'graph saved as',path_save
+	if(path_save is not None):
+	    data = json_graph.node_link_data(flux_graph)
+	    json.dump(data, open(path_save, 'w'))
+	    #print 'graph saved as',path_save
 
 	return flux_graph

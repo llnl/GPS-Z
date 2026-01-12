@@ -7,6 +7,7 @@ import time
 import cantera as ct
 import shutil
 import copy
+from collections import defaultdict
 from multiprocessing import Pool
 
 from PyQt5 import uic
@@ -512,9 +513,253 @@ def do_GPS_run(inputs):
 
     return GPS_results
 
+def do_GPS_run_new(inputs):
+    global pool_soln
+    soln = pool_soln
+
+    dir_raw, elem, i_pnt, \
+        source, target, K_list, alpha_list, beta_list, iso, \
+        gamma_list, fuel_name, oxid_name = inputs
+
+    raw = load_raw(os.path.join(dir_raw,'raw.npz'))
+    T = raw['temperature']
+    axis0 = raw['axis0']
+
+    print(f'building {elem}-graph for pnt {i_pnt} of {dir_raw}')
+    flux_graph = build_flux_graph(soln, raw, elem,  path_save=None, overwrite=False,
+                                  i0=i_pnt, i1=i_pnt, constV=False)
+
+
+    collected_results = []
+    for K in K_list:
+        for beta in beta_list:
+            for alpha in alpha_list:
+                for gamma in gamma_list:
+                    GPS_notes = 'T = '+str(T[i_pnt])+', axis0 = '+str(axis0[i_pnt])+\
+                            ' ('+str(min(axis0))+' ~ '+str(max(axis0))+')'
+
+                    name_how = st2name(i_pnt, elem, source, target)
+                    print(f'performing GPS: {name_how}')
+
+                    GPS_results = GPS_algo(soln, flux_graph, source, target, \
+                        path_save=None, K=K, alpha=alpha, beta=beta, \
+                        normal='max', iso=iso, overwrite=True, raw=dir_raw, \
+                        notes=GPS_notes, gamma=gamma)
+                    species_kept = set(GPS_results['species'].keys())
+                    collected_results.append(species_kept)
+
+    return collected_results
 
 
 def run_GPS(parent, progress):
+    min_dT = parent.min_dT
+
+    dir_public = parent.project['dir_public']
+    dir_de = os.path.join(dir_public,'detailed')
+    soln = parent.soln['detailed']
+
+    list_train = []
+    train_name = parent.train_name
+    for db_name in parent.project['database'].keys():
+        if parent.project['database'][db_name]['train']:
+            list_train.append(db_name)
+
+    list_GPS = []
+    for GPS_name in parent.project['GPS'].keys():
+        if parent.project['GPS'][GPS_name]['checked']:
+            list_GPS.append(GPS_name)
+
+    v = 0
+    if bool(list_GPS) == False:
+        return False
+    dv_GPS = 100.0/len(list_GPS)
+
+    # for different GPS settings ============================
+
+    for GPS_name in list_GPS:
+
+        GPS = parent.project['GPS'][GPS_name]
+        alpha_list = GPS['alpha']
+        beta_list = GPS['beta']
+        K_list = GPS['K']
+        must_keep = GPS['must_keep']
+
+        es_name = GPS['es']
+        es = parent.project['es'][es_name]
+        traced_list = []
+        for e in es['element'].keys():
+            if es['element'][e]['traced']:
+                traced_list.append(e)
+
+        if GPS['iso_enable']:
+            iso_name = GPS['iso']
+            iso = parent.project['iso'][iso_name]
+            gamma_list = GPS['gamma']
+        else:
+            iso_name = None
+            iso = None
+            gamma_list = [None]
+
+        inputs_array = []
+
+        for db_name in list_train:
+
+            database = parent.project['database'][db_name]
+            phi_list = database['phi']
+            T0_list = database['T0']
+            atm_list = database['atm']
+            fuel_list = database['fuel']
+            oxid_list = database['oxid']
+            reactor = database['reactor']
+
+            for fuel_name in fuel_list:
+                for oxid_name in oxid_list:
+                    for phi in phi_list:
+                        for atm in atm_list:
+                            for T0 in T0_list:
+
+                                fuel = parent.project['fuel'][fuel_name]
+                                oxid = parent.project['oxid'][oxid_name]
+
+                                e_available = set()
+                                for sp in fuel['composition'].keys():
+                                    e_available |= set(soln.species(sp).composition.keys())
+                                for sp in oxid['composition'].keys():
+                                    e_available |= set(soln.species(sp).composition.keys())
+
+                                dir_raw = cond2dir(dir_de, fuel_name, \
+                                    oxid_name, phi, atm, T0, \
+                                    reactor, parent.n_digit)
+                                if 'DNS' in reactor:
+                                    dir_raw = os.path.join(dir_raw, database['case'][0])
+
+                                dir_graph = os.path.join(dir_raw,'graph')
+
+                                raw_name = cond2dir('', fuel_name, \
+                                    oxid_name, phi, atm, T0, \
+                                    reactor, parent.n_digit)
+
+                                if 'DNS' in reactor:
+                                    raw_name += '/' + database['case'][0]
+
+                                raw = load_raw(os.path.join(dir_raw,'raw.npz'))
+                                T = raw['temperature']
+                                axis0 = raw['axis0']
+                                n_pnt = len(raw['axis0'])
+
+                                print('dir_raw = '+str(dir_raw))
+                                print('n_point = '+str(n_pnt))
+
+                                # for different time instance ================
+
+                                flag = False
+                                # -----------------------------------------------
+                                # I only consider the points where T and T0 has
+                                # some difference, which means there're reactions
+                                # performing GPS on chemically frozen state, or
+                                # equilibirum state (for PSR), does not give too
+                                # much useful information
+                                #
+                                # once a point is sampled, flag = True
+                                # -----------------------------------------------
+
+                                for i_pnt in range(len(T)):
+
+                                    if flag == False:
+                                        if abs(T[i_pnt]-T[0])>min_dT:
+                                            flag = True
+                                        else:
+                                            continue
+
+                                    for e in traced_list:
+                                        if e not in e_available:
+                                            continue
+
+                                        sources = copy.copy(es['element'][e]['source'])
+
+                                        if bool(sources) == False:
+                                            sources = [None]
+                                        if parent.alias_fuel in sources:
+                                            del sources[sources.index(parent.alias_fuel)]
+
+                                            for sp in fuel['composition'].keys():
+                                                atoms = soln.species(sp).composition.keys()
+                                                if e in atoms:
+                                                    sources += [sp]
+
+                                        targets = es['element'][e]['target']
+                                        if bool(targets) == False:
+                                            targets = [None]
+
+                                        for target in targets:
+                                            for source in sources:
+                                                inputs_array.append([dir_raw, e, i_pnt,
+                                                    source, target, K_list, alpha_list,
+                                                    beta_list, iso, gamma_list,
+                                                    fuel_name, oxid_name])
+
+        global pool_soln
+        pool_soln = soln
+        with PoolWrapper() as p:
+            results = p.map(do_GPS_run_new, inputs_array)
+
+        species_sets = defaultdict(set)
+        for i, o in zip(inputs_array, results):
+            dir_raw, elem, i_pnt, \
+                source, target, K_list, alpha_list, beta_list, iso, \
+                gamma_list, fuel_name, oxid_name = i
+
+            omat = np.array(o).reshape( (len(K_list), len(beta_list),
+                                          len(alpha_list), len(gamma_list) ) )
+            for ik, K in enumerate(K_list):
+                for ib, beta in enumerate(beta_list):
+                    for ia, alpha in enumerate(alpha_list):
+                        for ig, gamma in enumerate(gamma_list):
+                            dir_sk = para2dir_GPS(dir_public, train_name, \
+                                alpha=alpha, K=K, beta=beta, \
+                                es_name=es_name, iso_name=iso_name, \
+                                d=parent.n_digit, gamma=gamma)
+
+                            species_kept = set(must_keep)
+
+                            fuel = parent.project['fuel'][fuel_name]
+                            oxid = parent.project['oxid'][oxid_name]
+                            species_kept |= set(fuel['composition'].keys())
+                            species_kept |= set(oxid['composition'].keys())
+
+                            new_kept = omat[ik,ib,ia,ig]
+                            species_kept |= new_kept
+                            species_sets[dir_sk]  |= species_kept
+
+
+        for K in K_list:
+            for beta in beta_list:
+                for alpha in alpha_list:
+                    for gamma in gamma_list:
+                        dir_sk = para2dir_GPS(dir_public, train_name, \
+                            alpha=alpha, K=K, beta=beta, \
+                            es_name=es_name, iso_name=iso_name, \
+                            d=parent.n_digit, gamma=gamma)
+                        dir_mech_de = os.path.join(dir_de,'mech')
+                        dir_mech_sk = os.path.join(dir_sk,'mech')
+
+                        species_kept = species_sets[dir_sk]
+
+                        notes = ['! generated by global pathway selection, Gao et al,'+ \
+                                  ' Combustion and flame, 167 (2016) 238-247']
+                        notes.append('! alpha = ' + str(alpha) + ', K = ' + str(K) + \
+                                     ', beta = ' + str(beta))
+                        notes.append('! training database: '+train_name)
+
+                        # generate chem.inp ***************
+                        write_sk_inp(species_kept, dir_mech_de, dir_mech_sk, notes)
+
+    progress.set_value('GPS', 100)
+    return True
+
+
+
+def run_GPS_old(parent, progress):
     if not run_graph(parent, progress,'GPS'):
         return False
 
