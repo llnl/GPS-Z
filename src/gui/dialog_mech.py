@@ -14,7 +14,7 @@ from PyQt5.QtCore import *
 
 from .def_dialog import common
 from src.core.def_tools import keys_sorted
-from src.ct.ck2cti_GPS import ck2cti
+from src.ct.ck2yaml_GPS import ck2yaml
 
 import os
 
@@ -176,12 +176,12 @@ class dialog_mech(common):
 		if self.read_name() and self.read_path():
 
 			dir_desk = self.data['desk']
-			path_cti = os.path.join(dir_desk,'mech','chem.cti')
+			path_yaml = os.path.join(dir_desk,'mech','chem.yaml')
 
 			if  self.data['chem'] != self.data_ini['chem'] or \
 				self.data['therm'] != self.data_ini['therm'] or \
 				self.data['desk'] != self.data_ini['desk'] or \
-				(not os.path.exists(path_cti)):
+				(not os.path.exists(path_yaml)):
 
 				if self.act_set() == False:
 					return None
@@ -208,12 +208,12 @@ class dialog_mech(common):
 
 		if self.read_path():
 			dir_desk = self.data['desk']
-			path_cti = os.path.join(dir_desk,'mech','chem.cti')
-			if not os.path.exists(path_cti):
+			path_yaml = os.path.join(dir_desk,'mech','chem.yaml')
+			if not os.path.exists(path_yaml):
 
 				dir_desk = self.data['desk']
 				dir_desk_mech = os.path.join(dir_desk,'mech')
-				path_cti = os.path.join(dir_desk_mech,'chem.cti')
+				path_yaml = os.path.join(dir_desk_mech,'chem.yaml')
 
 				if not os.path.exists(dir_desk_mech):
 					os.makedirs(dir_desk_mech)
@@ -227,10 +227,10 @@ class dialog_mech(common):
 				self.w.btn_save.setText('setting...')
 				self.parent.app.processEvents()
 
-				if ck2cti(dir_desk_mech):
+				if ck2yaml(dir_desk_mech):
 					self.no_set = False
-					self.soln = ct.Solution(path_cti)
-					self.soln_in = ct.Solution(path_cti)
+					self.soln = ct.Solution(path_yaml)
+					self.soln_in = ct.Solution(path_yaml)
 
 					n_sp = self.soln.n_species
 					f = open(os.path.join(dir_desk_mech,'ns.txt'),'w')

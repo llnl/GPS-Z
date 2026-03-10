@@ -525,9 +525,9 @@ def painter(parent, fig_opt, sub_opt, ax, tp):
 			if mech in parent.soln.keys():
 				soln = parent.soln[mech]
 			else:
-				path_cti = os.path.join(dir_desk,'mech','chem.cti')
-				soln = ct.Solution(path_cti)
-				parent.soln[mech] = ct.Solution(path_cti)
+				path_yaml = os.path.join(dir_desk,'mech','chem.yaml')
+				soln = ct.Solution(path_yaml)
+				parent.soln[mech] = ct.Solution(path_yaml)
 
 		
 		# ========================================

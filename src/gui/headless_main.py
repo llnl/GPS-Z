@@ -75,16 +75,16 @@ class headless_main(object):
         self.project = json.load(open(path_json,'r'))
         dir_public = self.project['dir_public']
 
-        # detailed chem.cti ----------
+        # detailed chem.yaml ----------
         dir_desk = os.path.join(dir_public,'detailed')
-        path_cti = os.path.join(dir_desk,'mech','chem.cti')
+        path_yaml = os.path.join(dir_desk,'mech','chem.yaml')
 
         #TODO: Make cti instead of raising error
-        if not os.path.exists(path_cti):
-            raise ValueError(f"CTI file doesn't exist ({path_cti}), please configure run with gui")
+        if not os.path.exists(path_yaml):
+            raise ValueError(f"Yaml file doesn't exist ({path_yaml}), please configure run with gui")
 
-        self.soln['detailed'] = ct.Solution(path_cti)
-        self.soln_in['detailed'] = ct.Solution(path_cti)
+        self.soln['detailed'] = ct.Solution(path_yaml)
+        self.soln_in['detailed'] = ct.Solution(path_yaml)
         if not bool(self.project['mech']['detailed']['chem']):
             self.project['mech']['detailed']['chem'] = os.path.join(dir_desk,'mech','chem.inp')
             self.project['mech']['detailed']['therm'] = os.path.join(dir_desk,'mech','therm.dat')

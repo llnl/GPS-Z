@@ -28,7 +28,7 @@ def find_tau_ign(fld):
 
 			t_csv = os.path.join(folder,fat,'time.csv')
 			if os.path.exists(t_csv):
-				with open(t_csv, "rU") as f:
+				with open(t_csv, "r") as f:
 					reader = csv.reader(f, delimiter=',')
 					for row in reader:
 						last_t = row[0]

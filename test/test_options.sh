@@ -12,7 +12,7 @@ function run() {
   rm -rf test/${d}/GPS test/${d}/detailed/raw
   echo "Testing ${label}..."
   time python3 gps_headless.py test/${d}/project.json >& test/${label}.log
-  mv test/${d}/GPS/**/chem.cti test/${label}.cti
+  mv test/${d}/GPS/**/chem.yaml test/${label}.yaml
   cp -r test/test_inputs test/test_inputs_${label}
 }
 

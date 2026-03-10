@@ -320,14 +320,14 @@ class window_main(common):
 				self.project['dir_public'] = dir_public
 				self.set()
 
-			# detailed chem.cti ----------
+			# detailed chem.yaml ----------
 
 			dir_desk = os.path.join(dir_public,'detailed')
-			path_cti = os.path.join(dir_desk,'mech','chem.cti')
+			path_yaml = os.path.join(dir_desk,'mech','chem.yaml')
 
-			if os.path.exists(path_cti):
-				self.soln['detailed'] = ct.Solution(path_cti)
-				self.soln_in['detailed'] = ct.Solution(path_cti)
+			if os.path.exists(path_yaml):
+				self.soln['detailed'] = ct.Solution(path_yaml)
+				self.soln_in['detailed'] = ct.Solution(path_yaml)
 				if not bool(self.project['mech']['detailed']['chem']):
 					self.project['mech']['detailed']['chem'] = os.path.join(dir_desk,'mech','chem.inp')
 					self.project['mech']['detailed']['therm'] = os.path.join(dir_desk,'mech','therm.dat')
