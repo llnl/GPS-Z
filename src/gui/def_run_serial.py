@@ -18,7 +18,7 @@ from src.ct.senkin import senkin
 from src.zk.zerork import zerork, zerork_S_curve, zerork_premix
 from src.ct.psr import S_curve
 from src.ck.def_cheminp import skeletal
-from src.ct.ck2cti_GPS import ck2cti
+from src.ct.ck2yaml_GPS import ck2yaml
 
 from .dialog_GPS import dialog_GPS
 #from dialog_PFA import dialog_PFA
@@ -138,7 +138,7 @@ def write_sk_inp(species_kept, dir_mech_de, dir_mech_sk, notes):
 
     notes.append('! number of species = '+str(n_sp))
     skeletal(dir_mech_de, dir_mech_sk, species_kept, notes=notes)
-    ck2cti(dir_mech_sk)
+    ck2yaml(dir_mech_sk)
 
     f = open(os.path.join(dir_mech_sk,'ns.txt'),'w')
     f.write(str(n_sp))
@@ -532,17 +532,17 @@ def run_GPS(parent, progress):
                         progress.set_info('\n' + '-'*10 + dir_sk + ' ' + '-'*10)
 
                         dir_mech_sk = os.path.join(dir_sk,'mech')
-                        path_cti_sk = os.path.join(dir_mech_sk,'chem.cti')
+                        path_yaml_sk = os.path.join(dir_mech_sk,'chem.yaml')
 
-                        if os.path.exists(path_cti_sk):
-                            progress.set_info('<already exists, skipped> '+path_cti_sk)
+                        if os.path.exists(path_yaml_sk):
+                            progress.set_info('<already exists, skipped> '+path_yaml_sk)
                             v += dv_kab
                             progress.set_value('GPS',v)
                             continue
 
                         dir_de = os.path.join(dir_public,'detailed')
                         dir_mech_de = os.path.join(dir_de,'mech')
-                        path_cti_de = os.path.join(dir_mech_de,'chem.cti')
+                        path_yaml_de = os.path.join(dir_mech_de,'chem.yaml')
 
                         species_kept = set(must_keep)
 
@@ -1196,9 +1196,9 @@ def run_test(parent, progress):
 
                             progress.set_info('\n' + '-'*10 + dir_sk + ' ' + '-'*10)
 
-                            path_cti = os.path.join(dir_sk,'mech','chem.cti')
-                            soln = ct.Solution(path_cti)
-                            soln_in = ct.Solution(path_cti)
+                            path_yaml = os.path.join(dir_sk,'mech','chem.yaml')
+                            soln = ct.Solution(path_yaml)
+                            soln_in = ct.Solution(path_yaml)
 
                             v = raw_single_mech(progress, list_test, parent, dv_kab, v, dir_sk, soln, soln_in,'test')
 
@@ -1221,10 +1221,10 @@ def run_test(parent, progress):
         sk = parent.project['mech'][name]
         if name != 'detailed' and sk['checked']:
             dir_sk = sk['desk']
-            path_cti = os.path.join(dir_sk,'mech','chem.cti')
+            path_yaml = os.path.join(dir_sk,'mech','chem.yaml')
             if name not in parent.soln.keys():
-                parent.soln[name] = ct.Solution(path_cti)
-                parent.soln_in[name] = ct.Solution(path_cti)
+                parent.soln[name] = ct.Solution(path_yaml)
+                parent.soln_in[name] = ct.Solution(path_yaml)
 
             soln = parent.soln[name]
             soln_in = parent.soln_in[name]

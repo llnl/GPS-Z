@@ -13,7 +13,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
 from src.core.def_tools import keys_sorted
-from src.ct.ck2cti_GPS import ck2cti
+from src.ct.ck2yaml_GPS import ck2yaml
 
 
 class dialog_view_mech(object):
@@ -55,15 +55,15 @@ class dialog_view_mech(object):
 		#dir_desk = os.path.join(self.parent.project['dir_public'],data_name)
 		#dir_desk_mech = os.path.join(dir_desk,'mech')
 		dir_desk = self.parent.project['mech'][data_name]['desk']
-		path_cti = os.path.join(dir_desk,'mech','chem.cti')
-		if os.path.exists(path_cti) == False:
-			msg = 'no chem.cti file\n\n'+path_cti
+		path_yaml = os.path.join(dir_desk,'mech','chem.yaml')
+		if os.path.exists(path_yaml) == False:
+			msg = 'no chem.yaml file\n\n'+path_yaml
 			QMessageBox.information(QWidget(),'',msg)
 			return None
 
 		if data_name not in self.parent.soln.keys():
-			self.parent.soln[data_name] = ct.Solution(path_cti)
-			self.parent.soln_in[data_name] = ct.Solution(path_cti)
+			self.parent.soln[data_name] = ct.Solution(path_yaml)
+			self.parent.soln_in[data_name] = ct.Solution(path_yaml)
 
 		self.soln = self.parent.soln[data_name]
 		self.w.txt_name.setText(': '+ data_name)

@@ -13,10 +13,9 @@ from PyQt5.QtCore import *
 
 from .def_dialog import common
 from src.core.def_tools import keys_sorted
-from src.ct.ck2cti_GPS import ck2cti
+from src.ct.ck2yaml_GPS import ck2yaml
 
 import os
-
 
 
 
