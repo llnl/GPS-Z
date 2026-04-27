@@ -87,7 +87,7 @@ class dialog_mech(common):
 
 			if bool(ss):
 				self.data[key] = ss
-			else:
+			elif key != "therm":
 				msg = para + ' not provided'
 				QMessageBox.information(QWidget(),'',msg)
 				return False
@@ -219,8 +219,11 @@ class dialog_mech(common):
 					os.makedirs(dir_desk_mech)
 
 				shutil.copy(self.data['chem'],os.path.join(dir_desk_mech,'chem0.inp'))
-				shutil.copy(self.data['therm'],os.path.join(dir_desk_mech,'therm0.dat'))
-
+				if(self.data['therm']):
+					shutil.copy(self.data['therm'],os.path.join(dir_desk_mech,'therm0.dat'))
+				else:
+					with open(os.path.join(dir_desk_mech,'therm0.dat'), 'a'):
+						pass
 				fun_cleanck(dir_desk_mech)
 
 				self.w.btn_save.setEnabled(False)

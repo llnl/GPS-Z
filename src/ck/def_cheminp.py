@@ -56,8 +56,14 @@ def skeletal(detailed_folder, sk_folder, species_kept, notes=None):
 		f.write('\n')
 	f.write('END\n\n')
 
+	if(len(mech['thermo']) > 0):
+		f.write("THERMO\n")
+		for line in mech["thermo"]:
+			f.write(line)
+		f.write("END\n")
 
-	f.write('REACTIONS\n')
+	units_str = mech['units_str']
+	f.write(f'REACTIONS {units_str}\n')
 	rxn_kept = []
 	for rxn in rxn_all:
 		if all(member in species_kept for member in rxn_all[rxn]['member'].keys()):
