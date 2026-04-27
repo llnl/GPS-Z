@@ -28,12 +28,12 @@ def cheminp_extract_rxn_name(line):
     name = name.replace('<', '')
     name = name.replace('>', '')
 
-    # remove 3rd body info like (+M), (+h2)
+    # remove 3rd body parens (+M), (+h2) => +M, +h2
     L,R = name.split('=')
     par_L = find_3rd_body(L)
     par_R = find_3rd_body(R)
     if ('+' in par_L) and (par_L == par_R):
-        name = name.replace('('+par_L+')','')
+        name = name.replace('('+par_L+')',par_L)
 
     #print('extracted name "'+str(name)+'" from line "'+str(line)+'"')
     return name
@@ -110,7 +110,8 @@ def read_cheminp(path):
     # initialization
     mechanism = {'element': {}, 'species': {}, 'reaction': {},
                  'species_id2name': {},
-                 'n_species': 0, 'n_reaction': 0, 'n_element': 0}
+                 'n_species': 0, 'n_reaction': 0, 'n_element': 0,
+                 'thermo': [], 'units_str': ''}
 
     id_rxn = 0
     id_sp = 0
@@ -120,6 +121,7 @@ def read_cheminp(path):
     section = 0
     for line in f:
         if_parse = 0
+        unclean_line = line
         line = cheminp_clean(line)
 
         if line:
@@ -130,17 +132,20 @@ def read_cheminp(path):
                 section = 1
             elif re.search('species', line, re.IGNORECASE):
                 section = 2
-            elif re.search('reaction', line, re.IGNORECASE):
+            elif re.search('thermo', line, re.IGNORECASE):
                 section = 3
+            elif re.search('reaction', line, re.IGNORECASE):
+                section = 4
+                units_str = " ".join(line.split()[1:])
+                mechanism['units_str'] = units_str
             elif re.search('end', line, re.IGNORECASE):
-                if section == 3:
+                if section == 4:
                     break
             else:
                 if_parse = 1
 
         if if_parse:
             # parse the line only when this line is not empty, a section header, or END
-
             if section == 1:
                 ee = cheminp_split(line)
                 for e in ee:
@@ -160,6 +165,9 @@ def read_cheminp(path):
                         mechanism['species_id2name'][str(id_sp)] = s
 
             elif section == 3:
+                mechanism['thermo'].append(unclean_line)
+
+            elif section == 4:
                 if line.find('=') >= 0:
                     name = cheminp_extract_rxn_name(line)
                     member = fun_parse_rxn(name, mechanism['species'].keys())
