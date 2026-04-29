@@ -7,9 +7,8 @@ import time
 import cantera as ct
 import shutil
 import copy
-from functools import partial
 from collections import defaultdict
-from multiprocessing import Pool
+from multiprocessing import Pool, set_start_method
 
 from PyQt5 import uic
 from PyQt5.QtGui import *
@@ -247,7 +246,7 @@ def run_train(parent, progress):
 
     v = 0
     progress.set_value('train', v)
-    raw_single_mech(progress, list_train, parent, 100, v, dir_de, soln, soln_in)
+    raw_single_mech(progress, list_train, parent, 100, v, dir_de)
     progress.set_value('train', 100)
     return True
 
@@ -256,7 +255,7 @@ def run_train(parent, progress):
 """ >>>>>>>>>>>>>------------------------------------------------
 """
 
-def do_run(soln, soln_in, inputs):
+def do_run(inputs):
     fuel_name, fuel, oxid_name, oxid, phi, atm, T0, dir_desk, reactor, n_digit = inputs
 
     dir_raw = cond2dir(dir_desk, fuel_name, oxid_name, phi, atm, T0, \
@@ -267,16 +266,20 @@ def do_run(soln, soln_in, inputs):
         #progress.set_info('<already exists, skipped> '+dir_raw)
         pass
     else:
+        path_yaml = os.path.join(dir_desk,"mech","chem.yaml")
+        soln = ct.Solution(path_yaml)
+        soln_in = ct.Solution(path_yaml)
+
         #progress.set_info(dir_raw)
         find_raw(soln, soln_in,\
             dir_desk, fuel,    oxid, phi, atm, T0, reactor, n_digit)
+
     #TODO: progress bar
     #v += dv_raw
     #progress.set_value(bar, v)
 
+def raw_single_mech(progress, list_db, parent, dv_mech, v, dir_desk, bar='train'):
 
-
-def raw_single_mech(progress, list_db, parent, dv_mech, v, dir_desk, soln, soln_in, bar='train'):
     dv_db = 1.0 * dv_mech /len(list_db)
 
     for db_name in list_db:
@@ -297,7 +300,6 @@ def raw_single_mech(progress, list_db, parent, dv_mech, v, dir_desk, soln, soln_
         inputs_array = []
         for fuel_name in fuel_list:
             fuel = parent.project['fuel'][fuel_name]
-            print(fuel)
             for oxid_name in oxid_list:
                 oxid = parent.project['oxid'][oxid_name]
                 for phi in phi_list:
@@ -307,25 +309,17 @@ def raw_single_mech(progress, list_db, parent, dv_mech, v, dir_desk, soln, soln_
                             oxid, phi, atm, T0, dir_desk, reactor,
                             parent.n_digit])
 
+        set_start_method("spawn")
         with PoolWrapper() as p:
-            p.map(partial(do_run, soln, soln_in), inputs_array)
-
-        for fuel_name in fuel_list:
-            for oxid_name in oxid_list:
-                if 'autoignition' in reactor:
-                    fld = os.path.join(dir_desk,'raw',
-                        '['+fuel_name.strip('[').strip(']')+'] + ['+oxid_name.strip('[').strip(']')+']')
-                    find_tau_ign(fld)
-                    print()
-                    print('find_tau_ign')
-                    print('fld = '+str(fld))
-                    print()
+            _ = list(p.imap(do_run, inputs_array))
 
     return v
 
 
-def do_graph(soln, inputs):
+def do_graph(inputs):
     raw, e, path_graph, i_pnt, dir_raw, dir_de = inputs
+    path_yaml = os.path.join(dir_de,"mech","chem.yaml")
+    soln = ct.Solution(path_yaml)
 
     print(f'building {e}-graph for pnt {i_pnt} of {dir_raw.replace(dir_de,"")}')
     build_flux_graph(soln, raw, e, path_save=path_graph, overwrite=False,
@@ -429,7 +423,7 @@ def run_graph(parent, progress, task):
 
 
         with PoolWrapper() as p:
-            p.map(partial(do_graph,soln), inputs_list)
+            _ = list(p.imap(do_graph, inputs_list))
 
     obj.setText(task)
     progress.set_value(task,0.0)
@@ -461,11 +455,13 @@ def run_graph(parent, progress, task):
 
     """
 
-def do_GPS_run(soln, inputs):
-
+def do_GPS_run(inputs):
     path_graph, dir_raw, e, i_pnt, flag, \
         source, target, path_gps, K, alpha, beta, iso, \
-        gamma = inputs
+        gamma, dir_de = inputs
+
+    path_yaml = os.path.join(dir_de,"mech","chem.yaml")
+    soln = ct.Solution(path_yaml)
 
     raw = load_raw(os.path.join(dir_raw,'raw.npz'))
     T = raw['temperature']
@@ -497,11 +493,13 @@ def do_GPS_run(soln, inputs):
 
     return GPS_results
 
-def do_GPS_run_new(soln, inputs):
-
+def do_GPS_run_new(inputs):
     dir_raw, elem, i_pnt, \
         source, target, K_list, alpha_list, beta_list, iso, \
-        gamma_list, fuel_name, oxid_name = inputs
+        gamma_list, fuel_name, oxid_name, dir_de = inputs
+
+    path_yaml = os.path.join(dir_de,"mech","chem.yaml")
+    soln = ct.Solution(path_yaml)
 
     raw = load_raw(os.path.join(dir_raw,'raw.npz'))
     T = raw['temperature']
@@ -678,16 +676,16 @@ def run_GPS(parent, progress):
                                                 inputs_array.append([dir_raw, e, i_pnt,
                                                     source, target, K_list, alpha_list,
                                                     beta_list, iso, gamma_list,
-                                                    fuel_name, oxid_name])
+                                                    fuel_name, oxid_name, dir_de])
 
         with PoolWrapper() as p:
-            results = p.map(partial(do_GPS_run_new,soln), inputs_array)
+            results = list(p.imap(do_GPS_run_new, inputs_array))
 
         species_sets = defaultdict(set)
         for i, o in zip(inputs_array, results):
             dir_raw, elem, i_pnt, \
                 source, target, K_list, alpha_list, beta_list, iso, \
-                gamma_list, fuel_name, oxid_name = i
+                gamma_list, fuel_name, oxid_name, dir_de = i
 
             omat = np.array(o).reshape( (len(K_list), len(beta_list),
                                           len(alpha_list), len(gamma_list) ) )
@@ -938,11 +936,11 @@ def run_GPS_old(parent, progress):
                                                                 path_graph = os.path.join(dir_graph, e+'_'+str(i_pnt)+'.json')
                                                                 inputs_array.append([path_graph, dir_raw, e, i_pnt, flag,
                                                                         source, target, path_gps, K, alpha,
-                                                                        beta, iso, gamma]) 
+                                                                        beta, iso, gamma, dir_de]) 
                                                                 
 
         with PoolWrapper() as p:
-            results = p.map(partial(do_GPS_run,soln), inputs_array)
+            results = list(p.imap(do_GPS_run, inputs_array))
 
         result_idx = 0
         for K in K_list:
@@ -1433,7 +1431,7 @@ def run_test(parent, progress):
 
     v = 0
     progress.set_value('test', v)
-    raw_single_mech(progress, list_test, parent, 100, v, dir_de, soln, soln_in, 'test')
+    raw_single_mech(progress, list_test, parent, 100, v, dir_de, 'test')
 
 
 
@@ -1503,7 +1501,7 @@ def run_test(parent, progress):
                             soln = ct.Solution(path_yaml)
                             soln_in = ct.Solution(path_yaml)
 
-                            v = raw_single_mech(progress, list_test, parent, dv_kab, v, dir_sk, soln, soln_in,'test')
+                            v = raw_single_mech(progress, list_test, parent, dv_kab, v, dir_sk,'test')
 
 
 
@@ -1535,7 +1533,7 @@ def run_test(parent, progress):
             v = 0
             progress.w.label_test.setText('testing '+name)
             progress.set_value('test', v)
-            raw_single_mech(progress, list_test, parent, 100, v, dir_sk, soln, soln_in, 'test')
+            raw_single_mech(progress, list_test, parent, 100, v, dir_sk, 'test')
 
 
 
