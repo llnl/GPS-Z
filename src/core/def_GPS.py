@@ -170,7 +170,7 @@ def GPS_algo(soln, flux_graph, source, target, path_save=None, \
                     pp0 = [p0]
                     pp1 = [p1]
                 except:# nx.NetworkXNoPath:
-                    print('no path found for: '+str(source)+' --> '+str(hub)+' --> '+str(target))
+                    #print('no path found for: '+str(source)+' --> '+str(hub)+' --> '+str(target))
                     pass
 
             if bool(pp0):

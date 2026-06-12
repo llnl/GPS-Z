@@ -1,6 +1,5 @@
 
 import sys
-from PyQt5.QtWidgets import *
 import os
 import json
 import time
@@ -8,11 +7,8 @@ import cantera as ct
 import shutil
 import copy
 from collections import defaultdict
-from multiprocessing import Pool, set_start_method
-
-from PyQt5 import uic
-from PyQt5.QtGui import *
-from PyQt5.QtCore import *
+from multiprocessing import Pool
+from tqdm import tqdm
 
 from src.core.def_tools import *
 from src.ct.def_ct_tools import Xstr
@@ -32,6 +28,7 @@ from .find_tau_ign import find_tau_ign
 
 
 from src.ct.def_ct_tools import load_raw
+from src.ct.def_lwsoln import get_lwsoln
 from src.core.def_GPS import GPS_algo
 from src.core.def_build_graph import build_flux_graph
 from networkx.readwrite import json_graph
@@ -53,89 +50,6 @@ def PoolWrapper(*args, **kwargs):
         return Pool(p, *args, **kwargs)
     else:
         return Pool(*args, **kwargs)
-
-
-class dialog_progress(object):
-
-    def set_value(self, task, value):
-        tasks = ['train','GPS','test','GPSA']
-        bars = [self.w.bar_train, self.w.bar_GPS, self.w.bar_test, self.w.bar_GPSA]
-        bar = bars[tasks.index(task)]
-        bar.setValue(int(value))
-        self.parent.app.processEvents()
-
-    def set_info(self, new_info):
-        str_time = '[' + time.strftime("%H:%M:%S") + '] '
-        new_info = str_time + new_info.replace(self.dir_public,'').strip('/') + '\n'
-        #self.f.write(str(new_info))
-
-        old_info = self.w.txt_info.toPlainText()
-        self.w.txt_info.setText(old_info + new_info)
-        self.w.txt_info.moveCursor(QTextCursor.End)
-        self.parent.app.processEvents()
-
-    def act_verbose(self):
-        if self.verbose:
-            self.w.btn_verbose.setText('verbose')
-            self.verbose = False
-        else:
-            self.w.btn_verbose.setText('concise')
-            self.verbose = True
-
-
-    def act_stop(self):
-        self.stop = True
-        msg = 'will stop after finishing current sub-task'
-        QMessageBox.information(QWidget(),'',msg)
-
-    def close(self):
-        self.w.accept()
-
-    def __init__(self, parent):
-        ui_name = 'progress.ui'
-        self.parent = parent
-        self.stop = False
-        self.verbose = False
-        self.dir_public = self.parent.project['dir_public']
-        self.f = open(os.path.join(self.dir_public,'log.txt'),'w')
-
-        self.w = uic.loadUi(os.path.join(parent.dir_ui, ui_name))
-        self.w.btn_stop.clicked.connect(self.act_stop)
-        self.w.btn_verbose.clicked.connect(self.act_verbose)
-
-        tasks = ['train','GPS','test']
-        for task in tasks:
-            self.set_value(task,0)
-
-        self.parent.app.processEvents()
-        self.w.show()
-
-class dialog_progress_headless(object):
-    def set_value(self, task, value):
-        pass
-    def set_info(self, new_info):
-        pass
-    def act_verbose(self):
-        pass
-    def act_stop(self):
-        pass
-    def close(self):
-        pass
-    class _w(object):
-        class label(object):
-            def __init__(self):
-                pass
-            def setText(*args,**kwargs):
-                pass
-        def __init__(self):
-            self.label_test = self.label()
-            self.label_GPS = self.label()
-            self.label_GPSA = self.label()
-    def __init__(self, parent):
-        self.parent = parent
-        self.stop = False
-        self.verbose = False
-        self.w = self._w()
 
 
 """ >>>>>>>>>>>>>------------------------------------------------
@@ -167,14 +81,18 @@ def write_sk_inp(species_kept, dir_mech_de, dir_mech_sk, notes):
 
 
 CANTERA = bool(os.getenv("GPS_CANTERA", False))
-def find_raw(soln, soln_in, dir_desk, fuel, \
-    oxid, phi, atm, T0, reactor, n_digit):
+def find_raw(dir_desk, fuel, oxid, phi, atm, T0, reactor, n_digit):
     
     dir_raw = cond2dir(dir_desk, fuel['name'], oxid['name'], phi, atm, T0, reactor, n_digit)
+
     if not os.path.exists(dir_raw):
         os.makedirs(dir_raw)
 
+    path_yaml = os.path.join(dir_desk,"mech","chem.yaml")
     if CANTERA:
+        soln = ct.Solution(path_yaml)
+        soln_in = ct.Solution(path_yaml)
+
         X0 = Xstr(soln, fuel['composition'], phi, oxid['composition'])    
         if reactor == 'autoignition':
             senkin(soln, atm, T0, X0, if_half=True, dir_raw=dir_raw, if_fine=False)
@@ -188,6 +106,7 @@ def find_raw(soln, soln_in, dir_desk, fuel, \
             raise RuntimeError("Premix not supported when using Cantera")
             
     else:
+        soln = get_lwsoln(path_yaml)
         if 'autoignition' in reactor:
             is_fine=False
             if 'fine' in reactor:
@@ -231,11 +150,8 @@ def find_raw(soln, soln_in, dir_desk, fuel, \
     """
 
 
-def run_train(parent, progress):
-
+def run_train(parent):
     dir_de = os.path.join(parent.project['dir_public'],'detailed')
-    soln = parent.soln['detailed']
-    soln_in = parent.soln_in['detailed']
 
     list_train = []
     for db_name in parent.project['database'].keys():
@@ -245,9 +161,7 @@ def run_train(parent, progress):
     list_train = sorted(list_train)
 
     v = 0
-    progress.set_value('train', v)
-    raw_single_mech(progress, list_train, parent, 100, v, dir_de)
-    progress.set_value('train', 100)
+    raw_single_mech(list_train, parent, 100, v, dir_de)
     return True
 
 
@@ -263,22 +177,12 @@ def do_run(inputs):
     path_raw = os.path.join(dir_raw,'raw.npz')
 
     if os.path.exists(path_raw):
-        #progress.set_info('<already exists, skipped> '+dir_raw)
         pass
     else:
-        path_yaml = os.path.join(dir_desk,"mech","chem.yaml")
-        soln = ct.Solution(path_yaml)
-        soln_in = ct.Solution(path_yaml)
+        find_raw(dir_desk, fuel, oxid, phi, atm, T0, reactor, n_digit)
 
-        #progress.set_info(dir_raw)
-        find_raw(soln, soln_in,\
-            dir_desk, fuel,    oxid, phi, atm, T0, reactor, n_digit)
 
-    #TODO: progress bar
-    #v += dv_raw
-    #progress.set_value(bar, v)
-
-def raw_single_mech(progress, list_db, parent, dv_mech, v, dir_desk, bar='train'):
+def raw_single_mech(list_db, parent, dv_mech, v, dir_desk, bar='train'):
 
     dv_db = 1.0 * dv_mech /len(list_db)
 
@@ -292,11 +196,6 @@ def raw_single_mech(progress, list_db, parent, dv_mech, v, dir_desk, bar='train'
         oxid_list = database['oxid']
         reactor = database['reactor']
 
-        dv_raw = 1.0 * dv_db / (len(phi_list) * len(atm_list) * len(T0_list) *\
-                 len(fuel_list) * len(oxid_list))
-        
-        progress.set_info('\n' + '-'*10 + ' database: ' + db_name + ' ' + '-'*10)
-
         inputs_array = []
         for fuel_name in fuel_list:
             fuel = parent.project['fuel'][fuel_name]
@@ -309,135 +208,10 @@ def raw_single_mech(progress, list_db, parent, dv_mech, v, dir_desk, bar='train'
                             oxid, phi, atm, T0, dir_desk, reactor,
                             parent.n_digit])
 
-        set_start_method("spawn")
         with PoolWrapper() as p:
-            _ = list(p.imap(do_run, inputs_array))
+            _ = list(tqdm(p.imap(do_run, inputs_array), total=len(inputs_array), desc=f"{db_name}({reactor})"))
 
     return v
-
-
-def do_graph(inputs):
-    raw, e, path_graph, i_pnt, dir_raw, dir_de = inputs
-    path_yaml = os.path.join(dir_de,"mech","chem.yaml")
-    soln = ct.Solution(path_yaml)
-
-    print(f'building {e}-graph for pnt {i_pnt} of {dir_raw.replace(dir_de,"")}')
-    build_flux_graph(soln, raw, e, path_save=path_graph, overwrite=False,
-                     i0=i_pnt, i1=i_pnt, constV=False)
-
-
-
-def run_graph(parent, progress, task):
-    if task == 'GPS':
-        obj = progress.w.label_GPS
-    elif task == 'GPSA':
-        obj = progress.w.label_GPSA
-
-    obj.setText('building graph')
-
-        
-    dir_public = parent.project['dir_public']
-    soln = parent.soln['detailed']
-
-    list_train = []
-    train_name = parent.train_name
-    for db_name in parent.project['database'].keys():
-        if parent.project['database'][db_name]['train']:
-            list_train.append(db_name)
-
-    traced_list = []
-    for GPS_name in parent.project['GPS'].keys():
-        if parent.project['GPS'][GPS_name]['checked']:
-            GPS = parent.project['GPS'][GPS_name]
-            es_name = GPS['es']
-            es = parent.project['es'][es_name]
-            for e in es['element'].keys():
-                if es['element'][e]['traced']:
-                    if e not in traced_list:
-                        traced_list.append(e)
-
-    if not bool(traced_list):
-        msg = 'no traced element in selected GPS'
-        QMessageBox.information(QWidget(),'',msg)
-        return False
-
-    v = 0.0
-    dv_db = 100.0/len(list_train)
-    for db_name in list_train:
-
-        database = parent.project['database'][db_name]
-        phi_list = database['phi']
-        T0_list = database['T0']
-        atm_list = database['atm']
-        fuel_list = database['fuel']
-        oxid_list = database['oxid']
-        reactor = database['reactor']
-
-        dv_raw = dv_db / (len(phi_list) * len(atm_list) * len(T0_list) *\
-            len(fuel_list) * len(oxid_list))
-        
-        inputs_list = []
-        for fuel_name in fuel_list:
-            for oxid_name in oxid_list:
-                for phi in phi_list:
-                    for atm in atm_list:
-                        for T0 in T0_list:
-
-                            dir_de = os.path.join(dir_public,'detailed')
-                            dir_raw = cond2dir(dir_de, fuel_name, \
-                                oxid_name, phi, atm, T0, \
-                                reactor, parent.n_digit)                            
-                            if 'DNS' in reactor:
-                                dir_raw = os.path.join(dir_raw, database['case'][0])
-                            raw = load_raw(os.path.join(dir_raw,'raw.npz'))
-                            dir_graph = os.path.join(dir_raw,'graph')
-                            if not os.path.exists(dir_graph):
-                                os.makedirs(dir_graph)
-
-                            n_pnt = len(raw['axis0'])
-                            dv_pnt = 1.0 * dv_raw / n_pnt
-
-                            print('dir_raw = '+str(dir_raw))
-                            print('n_point = '+str(n_pnt))
-
-                            for i_pnt in range(n_pnt):
-                                """
-                                if 'active reactions' in raw.keys() and len(raw['active reactions'])>0:
-                                    if raw['active reactions'][i_pnt] == 0:
-                                        print('skipped pnt '+str(i_pnt)+' as no active reaction')
-                                        continue
-                                        """
-                                
-                                for e in traced_list:
-                                    path_graph = os.path.join(dir_graph, e+'_'+str(i_pnt)+'.json')
-                                    if not os.path.exists(path_graph):
-                                        inputs_list.append([raw,e, path_graph,i_pnt,dir_raw, dir_de])
-                                    else:
-                                        if i_pnt % 1e4 == 0 or i_pnt == n_pnt - 1:
-                                            print('already exists '+str(path_graph))
-                                        
-
-                                v += dv_pnt
-                                if n_pnt<100:
-                                    progress.set_value(task,v)
-
-
-        with PoolWrapper() as p:
-            _ = list(p.imap(do_graph, inputs_list))
-
-    obj.setText(task)
-    progress.set_value(task,0.0)
-    return True
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -456,59 +230,19 @@ def run_graph(parent, progress, task):
     """
 
 def do_GPS_run(inputs):
-    path_graph, dir_raw, e, i_pnt, flag, \
-        source, target, path_gps, K, alpha, beta, iso, \
-        gamma, dir_de = inputs
-
-    path_yaml = os.path.join(dir_de,"mech","chem.yaml")
-    soln = ct.Solution(path_yaml)
-
-    raw = load_raw(os.path.join(dir_raw,'raw.npz'))
-    T = raw['temperature']
-    axis0 = raw['axis0']
-
-    if os.path.exists(path_graph):
-        data = json.load(\
-            open(path_graph, 'r'))
-        flux_graph = json_graph.node_link_graph(data)
-    else:
-        dir_graph = os.path.join(dir_raw,'graph')
-        if not os.path.exists(dir_graph):
-            os.makedirs(dir_graph)
-
-        flux_graph = build_flux_graph(soln, raw, e, \
-            path_save=path_graph, overwrite=False, \
-            i0=i_pnt, i1=i_pnt, constV=False)
-
-    if flag == False:
-        return None
-
-    GPS_notes = 'T = '+str(T[i_pnt])+', axis0 = '+str(axis0[i_pnt])+\
-            ' ('+str(min(axis0))+' ~ '+str(max(axis0))+')'
-
-    GPS_results = GPS_algo(soln, flux_graph, source, target, \
-        path_save=path_gps, K=K, alpha=alpha, beta=beta, \
-        normal='max', iso=iso, overwrite=True, raw=dir_raw, \
-        notes=GPS_notes, gamma=gamma)
-
-    return GPS_results
-
-def do_GPS_run_new(inputs):
     dir_raw, elem, i_pnt, \
         source, target, K_list, alpha_list, beta_list, iso, \
         gamma_list, fuel_name, oxid_name, dir_de = inputs
 
     path_yaml = os.path.join(dir_de,"mech","chem.yaml")
-    soln = ct.Solution(path_yaml)
+    soln = get_lwsoln(path_yaml)
 
     raw = load_raw(os.path.join(dir_raw,'raw.npz'))
     T = raw['temperature']
     axis0 = raw['axis0']
 
-    print(f'building {elem}-graph for pnt {i_pnt} of {dir_raw}')
     flux_graph = build_flux_graph(soln, raw, elem,  path_save=None, overwrite=False,
                                   i0=i_pnt, i1=i_pnt, constV=False)
-
 
     collected_results = []
     for K in K_list:
@@ -519,7 +253,6 @@ def do_GPS_run_new(inputs):
                             ' ('+str(min(axis0))+' ~ '+str(max(axis0))+')'
 
                     name_how = st2name(i_pnt, elem, source, target)
-                    print(f'performing GPS: {name_how}')
 
                     GPS_results = GPS_algo(soln, flux_graph, source, target, \
                         path_save=None, K=K, alpha=alpha, beta=beta, \
@@ -531,12 +264,16 @@ def do_GPS_run_new(inputs):
     return collected_results
 
 
-def run_GPS(parent, progress):
+def run_GPS(parent):
     min_dT = parent.min_dT
 
     dir_public = parent.project['dir_public']
     dir_de = os.path.join(dir_public,'detailed')
-    soln = parent.soln['detailed']
+    def get_soln_species(dir_de):
+        path_yaml = os.path.join(dir_de,"mech","chem.yaml")
+        soln = get_lwsoln(path_yaml) 
+        return soln.species
+    soln_species = get_soln_species(dir_de)
 
     list_train = []
     train_name = parent.train_name
@@ -549,10 +286,8 @@ def run_GPS(parent, progress):
         if parent.project['GPS'][GPS_name]['checked']:
             list_GPS.append(GPS_name)
 
-    v = 0
     if bool(list_GPS) == False:
         return False
-    dv_GPS = 100.0/len(list_GPS)
 
     # for different GPS settings ============================
 
@@ -603,9 +338,9 @@ def run_GPS(parent, progress):
 
                                 e_available = set()
                                 for sp in fuel['composition'].keys():
-                                    e_available |= set(soln.species(sp).composition.keys())
+                                    e_available |= set(soln_species(sp).composition.keys())
                                 for sp in oxid['composition'].keys():
-                                    e_available |= set(soln.species(sp).composition.keys())
+                                    e_available |= set(soln_species(sp).composition.keys())
 
                                 dir_raw = cond2dir(dir_de, fuel_name, \
                                     oxid_name, phi, atm, T0, \
@@ -627,8 +362,8 @@ def run_GPS(parent, progress):
                                 axis0 = raw['axis0']
                                 n_pnt = len(raw['axis0'])
 
-                                print('dir_raw = '+str(dir_raw))
-                                print('n_point = '+str(n_pnt))
+                                #print('dir_raw = '+str(dir_raw))
+                                #print('n_point = '+str(n_pnt))
 
                                 # for different time instance ================
 
@@ -663,7 +398,7 @@ def run_GPS(parent, progress):
                                             del sources[sources.index(parent.alias_fuel)]
 
                                             for sp in fuel['composition'].keys():
-                                                atoms = soln.species(sp).composition.keys()
+                                                atoms = soln_species(sp).composition.keys()
                                                 if e in atoms:
                                                     sources += [sp]
 
@@ -679,7 +414,7 @@ def run_GPS(parent, progress):
                                                     fuel_name, oxid_name, dir_de])
 
         with PoolWrapper() as p:
-            results = list(p.imap(do_GPS_run_new, inputs_array))
+            results = list(tqdm(p.imap(do_GPS_run, inputs_array),total=len(inputs_array), desc="GPS"))
 
         species_sets = defaultdict(set)
         for i, o in zip(inputs_array, results):
@@ -732,322 +467,7 @@ def run_GPS(parent, progress):
                         # generate chem.inp ***************
                         write_sk_inp(species_kept, dir_mech_de, dir_mech_sk, notes)
 
-    progress.set_value('GPS', 100)
     return True
-
-
-
-def run_GPS_old(parent, progress):
-    if not run_graph(parent, progress,'GPS'):
-        return False
-
-
-    min_dT = parent.min_dT
-
-    dir_public = parent.project['dir_public']
-    soln = parent.soln['detailed']
-
-    list_train = []
-    train_name = parent.train_name
-    for db_name in parent.project['database'].keys():
-        if parent.project['database'][db_name]['train']:
-            list_train.append(db_name)
-
-    list_GPS = []
-    for GPS_name in parent.project['GPS'].keys():
-        if parent.project['GPS'][GPS_name]['checked']:
-            list_GPS.append(GPS_name)
-
-    v = 0
-    if bool(list_GPS) == False:
-        return False
-    dv_GPS = 100.0/len(list_GPS)
-
-    # for different GPS settings ============================
-
-    for GPS_name in list_GPS:
-
-        GPS = parent.project['GPS'][GPS_name]
-        alpha_list = GPS['alpha']
-        beta_list = GPS['beta']
-        K_list = GPS['K']
-        must_keep = GPS['must_keep']
-
-
-        es_name = GPS['es']
-        es = parent.project['es'][es_name]
-        traced_list = []
-        for e in es['element'].keys():
-            if es['element'][e]['traced']:
-                traced_list.append(e)
-
-
-        if GPS['iso_enable']:
-            iso_name = GPS['iso']
-            iso = parent.project['iso'][iso_name]
-            gamma_list = GPS['gamma']
-        else:
-            iso_name = None
-            iso = None
-            gamma_list = [None]
-
-        inputs_array = []
-        for K in K_list:
-            for beta in beta_list:
-                for alpha in alpha_list:
-                    for gamma in gamma_list:
-
-
-                        dir_sk = para2dir_GPS(dir_public, train_name, \
-                            alpha=alpha, K=K, beta=beta, \
-                            es_name=es_name, iso_name=iso_name, \
-                            d=parent.n_digit, gamma=gamma)
-
-                        dir_mech_sk = os.path.join(dir_sk,'mech')
-                        path_yaml_sk = os.path.join(dir_mech_sk,'chem.yaml')
-
-                        if os.path.exists(path_yaml_sk):
-                            continue
-
-                        dir_de = os.path.join(dir_public,'detailed')
-                        dir_mech_de = os.path.join(dir_de,'mech')
-                        path_yaml_de = os.path.join(dir_mech_de,'chem.yaml')
-
-                        notes = ['! generated by global pathway selection, Gao et al,'+\
-                            ' Combustion and flame, 167 (2016) 238-247']
-                        notes.append('! alpha = ' + str(alpha) + ', K = ' + str(K) + \
-                            ', beta = ' + str(beta))
-                        notes.append('! training database: '+train_name)
-
-
-
-                        # for different training database ============================
-
-                        for db_name in list_train:
-
-                            database = parent.project['database'][db_name]
-                            phi_list = database['phi']
-                            T0_list = database['T0']
-                            atm_list = database['atm']
-                            fuel_list = database['fuel']
-                            oxid_list = database['oxid']
-                            reactor = database['reactor']
-
-                            for fuel_name in fuel_list:
-                                for oxid_name in oxid_list:
-                                    for phi in phi_list:
-                                        for atm in atm_list:
-                                            for T0 in T0_list:
-                                                fuel = parent.project['fuel'][fuel_name]
-                                                oxid = parent.project['oxid'][oxid_name]
-
-                                                e_available = set()
-                                                for sp in fuel['composition'].keys():
-                                                    e_available |= set(soln.species(sp).composition.keys())                                                
-                                                for sp in oxid['composition'].keys():
-                                                    e_available |= set(soln.species(sp).composition.keys())
-
-
-
-                                                dir_raw = cond2dir(dir_de, fuel_name, \
-                                                    oxid_name, phi, atm, T0, \
-                                                    reactor, parent.n_digit)
-                                                if 'DNS' in reactor:
-                                                    dir_raw = os.path.join(dir_raw, database['case'][0])
-
-                                                dir_graph = os.path.join(dir_raw,'graph')
-
-                                                raw_name = cond2dir('', fuel_name, \
-                                                    oxid_name, phi, atm, T0, \
-                                                    reactor, parent.n_digit)
-                                                
-                                                if 'DNS' in reactor:
-                                                    raw_name += '/' + database['case'][0]
-
-                                                dir_how = os.path.join(dir_sk,raw_name.replace('raw','how'))
-
-                                                if not os.path.exists(dir_how):
-                                                    os.makedirs(dir_how)
-
-                                                raw = load_raw(os.path.join(dir_raw,'raw.npz'))
-                                                T = raw['temperature']
-                                                axis0 = raw['axis0']
-
-                                                
-
-
-                                                # for different time instance ================
-
-                                                flag = False
-                                                # -----------------------------------------------
-                                                # I only consider the points where T and T0 has
-                                                # some difference, which means there're reactions
-                                                # performing GPS on chemically frozen state, or
-                                                # equilibirum state (for PSR), does not give too
-                                                # much useful information
-                                                #
-                                                # once a point is sampled, flag = True
-                                                # -----------------------------------------------
-
-                                                for i_pnt in range(len(T)):
-
-                                                    """
-                                                    if 'active reactions' in raw.keys():
-                                                        if raw['active reactions'][i_pnt] == 0:
-                                                            print('skipped pnt '+str(i_pnt)+' as no active reaction')
-                                                            continue
-                                                            """
-
-                                                    if flag == False:
-                                                        if abs(T[i_pnt]-T[0])>min_dT:
-                                                            flag = True
-
-
-                                                    # for different source->target ==============
-
-                                                    for e in traced_list:
-
-                                                        if e not in e_available:
-                                                            continue
-
-                                                        sources = copy.copy(es['element'][e]['source'])
-
-                                                        if bool(sources) == False:
-                                                            sources = [None]
-                                                        if parent.alias_fuel in sources:
-                                                            del sources[sources.index(parent.alias_fuel)]
-
-                                                            for sp in fuel['composition'].keys():
-                                                                atoms = soln.species(sp).composition.keys()
-                                                                #print('atms of ' + sp + ' = ' +str(atoms))
-                                                                if e in atoms:
-                                                                    sources += [sp]
-
-
-                                                        targets = es['element'][e]['target']
-                                                        if bool(targets) == False:
-                                                            targets = [None]
-
-                                                        for target in targets:
-                                                            for source in sources:
-                                                                name_how = st2name(i_pnt, e, source, target)
-
-                                                                path_gps = os.path.join(dir_how, name_how+'.json')
-                                                                path_graph = os.path.join(dir_graph, e+'_'+str(i_pnt)+'.json')
-                                                                inputs_array.append([path_graph, dir_raw, e, i_pnt, flag,
-                                                                        source, target, path_gps, K, alpha,
-                                                                        beta, iso, gamma, dir_de]) 
-                                                                
-
-        with PoolWrapper() as p:
-            results = list(p.imap(do_GPS_run, inputs_array))
-
-        result_idx = 0
-        for K in K_list:
-            for beta in beta_list:
-                for alpha in alpha_list:
-                    for gamma in gamma_list:
-
-                        dir_sk = para2dir_GPS(dir_public, train_name, \
-                            alpha=alpha, K=K, beta=beta, \
-                            es_name=es_name, iso_name=iso_name, \
-                            d=parent.n_digit, gamma=gamma)
-
-                        dir_mech_sk = os.path.join(dir_sk,'mech')
-                        path_yaml_sk = os.path.join(dir_mech_sk,'chem.yaml')
-
-                        if os.path.exists(path_yaml_sk):
-                                                                    continue
-
-                        dir_de = os.path.join(dir_public,'detailed')
-                        dir_mech_de = os.path.join(dir_de,'mech')
-                        path_yaml_de = os.path.join(dir_mech_de,'chem.yaml')
-
-                        species_kept = set(must_keep)
-
-                        notes = ['! generated by global pathway selection, Gao et al,'+\
-                            ' Combustion and flame, 167 (2016) 238-247']
-                        notes.append('! alpha = ' + str(alpha) + ', K = ' + str(K) + \
-                            ', beta = ' + str(beta))
-                        notes.append('! training database: '+train_name)
-
-                        for db_name in list_train:
-
-                            database = parent.project['database'][db_name]
-                            phi_list = database['phi']
-                            T0_list = database['T0']
-                            atm_list = database['atm']
-                            fuel_list = database['fuel']
-                            oxid_list = database['oxid']
-                            reactor = database['reactor']
-
-                            for fuel_name in fuel_list:
-                                for oxid_name in oxid_list:
-                                    for phi in phi_list:
-                                        for atm in atm_list:
-                                            for T0 in T0_list:
-                                                dir_raw = cond2dir(dir_de, fuel_name, \
-                                                    oxid_name, phi, atm, T0, \
-                                                    reactor, parent.n_digit)
-                                                raw = load_raw(os.path.join(dir_raw,'raw.npz'))
-                                                T = raw['temperature']
-
-                                                fuel = parent.project['fuel'][fuel_name]
-                                                oxid = parent.project['oxid'][oxid_name]
-                                                species_kept |= set(fuel['composition'].keys())
-                                                species_kept |= set(oxid['composition'].keys())
-
-                                                e_available = set()
-                                                for sp in fuel['composition'].keys():
-                                                    e_available |= set(soln.species(sp).composition.keys())
-                                                for sp in oxid['composition'].keys():
-                                                    e_available |= set(soln.species(sp).composition.keys())
-                                                for i_pnt in range(len(T)):
-                                                    for e in traced_list:
-                                                        if e not in e_available:
-                                                            continue
-
-                                                        sources = copy.copy(es['element'][e]['source'])
-                                                        if bool(sources) == False:
-                                                            sources = [None]
-                                                        if parent.alias_fuel in sources:
-                                                            del sources[sources.index(parent.alias_fuel)]
-                                                            for sp in fuel['composition'].keys():
-                                                                atoms = soln.species(sp).composition.keys()
-                                                                if e in atoms:
-                                                                    sources += [sp]
-                                                        targets = es['element'][e]['target']
-                                                        if bool(targets) == False:
-                                                            targets = [None]
-
-                                                        for target in targets:
-                                                            for source in sources:
-                                                                if(results[result_idx] is not None):
-                                                                    new_kept = set(results[result_idx]['species'].keys())
-                                                                    species_kept |= new_kept
-                                                                result_idx += 1
-
-
-                        # generate chem.inp ***************
-                        write_sk_inp(species_kept, dir_mech_de, dir_mech_sk, notes)
-                        #"""
-    
-    assert(result_idx == len(results))
-    progress.set_value('GPS', 100)
-    return True
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1341,42 +761,6 @@ def run_GPSA(parent, progress):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 """ ------------------------------------------------------
 
 
@@ -1426,8 +810,6 @@ def run_test(parent, progress):
     progress.w.label_test.setText('calculating detailed...')
 
     dir_de = os.path.join(dir_public,'detailed')
-    soln = parent.soln['detailed']
-    soln_in = parent.soln_in['detailed']
 
     v = 0
     progress.set_value('test', v)
@@ -1498,8 +880,6 @@ def run_test(parent, progress):
                             progress.set_info('\n' + '-'*10 + dir_sk + ' ' + '-'*10)
 
                             path_yaml = os.path.join(dir_sk,'mech','chem.yaml')
-                            soln = ct.Solution(path_yaml)
-                            soln_in = ct.Solution(path_yaml)
 
                             v = raw_single_mech(progress, list_test, parent, dv_kab, v, dir_sk,'test')
 
@@ -1526,9 +906,6 @@ def run_test(parent, progress):
             if name not in parent.soln.keys():
                 parent.soln[name] = ct.Solution(path_yaml)
                 parent.soln_in[name] = ct.Solution(path_yaml)
-
-            soln = parent.soln[name]
-            soln_in = parent.soln_in[name]
 
             v = 0
             progress.w.label_test.setText('testing '+name)

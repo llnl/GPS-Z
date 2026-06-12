@@ -7,6 +7,8 @@ import time
 import cantera as ct
 import copy
 from .def_run import *
+from src.ct.def_lwsoln import get_lwsoln
+from multiprocessing import set_start_method
 
 class headless_main(object):
     def init_es_default(self):
@@ -20,8 +22,12 @@ class headless_main(object):
         es_e['h'] = {'only_hub':False, 'source':[alias_fuel],'target':['h2o']}
         es_e['!other!'] = {'only_hub':True, 'source':[],'target':[]}    
 
-        soln = self.soln['detailed']
         if bool(self.project['es']) == False:
+            dir_public = self.project['dir_public']
+            dir_desk = os.path.join(dir_public,'detailed')
+            path_yaml = os.path.join(dir_desk,'mech','chem.yaml')
+            soln = ct.Solution(path_yaml)
+
             element = dict()
             for e in soln.element_names:
                 if e in es_e.keys():
@@ -45,10 +51,6 @@ class headless_main(object):
     def __init__(self):
         # self.variables ============================
         self.dir_parent = os.getcwd()
-        self.soln = dict()
-        self.soln_in = dict()
-        self.soln['detailed'] = None
-        self.soln_in['detailed'] = None
 
         self.chr_not_allowed = [chr(92), '/', ':','*','?','"','<','>','|','+']
         self.ign_list = [
@@ -79,18 +81,18 @@ class headless_main(object):
         dir_desk = os.path.join(dir_public,'detailed')
         path_yaml = os.path.join(dir_desk,'mech','chem.yaml')
 
-        #TODO: Make cti instead of raising error
+        #TODO: Make yaml instead of raising error
         if not os.path.exists(path_yaml):
             raise ValueError(f"Yaml file doesn't exist ({path_yaml}), please configure run with gui")
 
-        self.soln['detailed'] = ct.Solution(path_yaml)
-        self.soln_in['detailed'] = ct.Solution(path_yaml)
+        #This will generate the pfile (if it doesn't exist) and cache the lwsoln
+        lwsoln = get_lwsoln(path_yaml)
+
         if not bool(self.project['mech']['detailed']['chem']):
             self.project['mech']['detailed']['chem'] = os.path.join(dir_desk,'mech','chem.inp')
             self.project['mech']['detailed']['therm'] = os.path.join(dir_desk,'mech','therm.dat')
         
         self.project['mech']['detailed']['desk'] = dir_desk
-
 
         self.init_es_default()
 
@@ -100,12 +102,12 @@ class headless_main(object):
                 train_name += (add_bracket(db_name)+' + ')
         self.train_name = train_name[:-3]
 
-        progress = dialog_progress_headless(self)
-        run_train(self, progress)
-        run_GPS(self, progress)
+        run_train(self)
+        run_GPS(self)
         #TODO:
         #run_test(self, None)
         #run_GPSA(self, None)            
 
 if __name__ == '__main__':
+    set_start_method("spawn")
     headless_main()
