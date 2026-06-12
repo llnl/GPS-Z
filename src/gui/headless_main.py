@@ -7,6 +7,7 @@ import time
 import cantera as ct
 import copy
 from .def_run import *
+from multiprocessing import set_start_method
 
 class headless_main(object):
     def init_es_default(self):
@@ -108,4 +109,5 @@ class headless_main(object):
         #run_GPSA(self, None)            
 
 if __name__ == '__main__':
+    set_start_method("spawn")
     headless_main()

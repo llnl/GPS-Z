@@ -8,7 +8,7 @@ import cantera as ct
 import shutil
 import copy
 from collections import defaultdict
-from multiprocessing import Pool, set_start_method
+from multiprocessing import Pool
 
 from PyQt5 import uic
 from PyQt5.QtGui import *
@@ -309,7 +309,6 @@ def raw_single_mech(progress, list_db, parent, dv_mech, v, dir_desk, bar='train'
                             oxid, phi, atm, T0, dir_desk, reactor,
                             parent.n_digit])
 
-        set_start_method("spawn")
         with PoolWrapper() as p:
             _ = list(p.imap(do_run, inputs_array))
 
