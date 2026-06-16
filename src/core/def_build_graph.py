@@ -8,11 +8,9 @@ import os
 
 __author__ = 'Xiang Gao'
 
-
 """ ----------------------------------------------
  construction of the  element flux graph
 -----------------------------------------------"""
-
 
 def build_flux_graph(soln, raw, traced_element, path_save=None, overwrite=False, i0=0, i1='eq', constV=False):
 
@@ -58,7 +56,7 @@ def build_flux_graph(soln, raw, traced_element, path_save=None, overwrite=False,
 	# unit will be converted to mole/sec
 
 
-	rr = np.reshape(raw['net_reaction_rate'][i0,:],[n_rxn,1]) 
+	rr = raw['net_reaction_rate'][i0,:]
 	flux_graph = DiGraph()
 
 	# -------------------------------------
@@ -88,7 +86,7 @@ def build_flux_graph(soln, raw, traced_element, path_save=None, overwrite=False,
 		for sp in sp_mu.keys():
 			atoms = species(sp).composition
 			if traced_element in atoms.keys():
-				n = int((sp_mu[sp] * atoms[traced_element] * np.sign(rr[id_rxn])).item())
+				n = int((sp_mu[sp] * atoms[traced_element] * np.sign(rr[id_rxn])))
 				if n > 0:
 					produced[sp] = abs(n)
 				elif n < 0:
@@ -106,7 +104,7 @@ def build_flux_graph(soln, raw, traced_element, path_save=None, overwrite=False,
 
 					# note that the direction (source-->target) is already assured
 					# therefore we use abs(RR) here
-					dw = max(float((n_i2j * abs(rr[id_rxn])).item()),1.0e-80)
+					dw = max(float((n_i2j * abs(rr[id_rxn]))),1.0e-80)
 
 					try:
 						flux_graph[source][target]['flux'] += dw

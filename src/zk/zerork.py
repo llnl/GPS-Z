@@ -173,8 +173,8 @@ def read_zerork_outfile(zerork_out):
             else:
                 raw['heat_release_rate'].append(0)
 
-    raw['net_reaction_rate'] = np.matrix(raw['net_reaction_rate']) * 1.0e3 #convert to mol/m^3/s
-    raw['mole_fraction'] = np.matrix(raw['mole_fraction'])
+    raw['net_reaction_rate'] = np.array(raw['net_reaction_rate']) * 1.0e3 #convert to mol/m^3/s
+    raw['mole_fraction'] = np.array(raw['mole_fraction'])
 
     return raw
 
@@ -230,8 +230,8 @@ def read_zerork_flame_restart(restart_file, grid_file):
         raw['net_reaction_rate'].append(net_rop)
 
 
-    raw['net_reaction_rate'] = np.matrix(raw['net_reaction_rate']).T * 1.0e3 #convert to mol/m^3/s
-    raw['mole_fraction'] = np.matrix(raw['mole_fraction'])
+    raw['net_reaction_rate'] = np.array(raw['net_reaction_rate']).T * 1.0e3 #convert to mol/m^3/s
+    raw['mole_fraction'] = np.array(raw['mole_fraction'])
 
     return raw
 
@@ -239,9 +239,9 @@ def read_zerork_flame_restart(restart_file, grid_file):
 def zerork(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names, rxn_equations, is_fine=False, dir_raw=None):
     cpu0 = time.time()
 
-    print('>'*30)
-    print('zerork for phi='+ str(phi) + ' at '+ str(atm)+'atm' + ' and '+str(T0)+'K')
-    print('<'*30)
+    #print('>'*30)
+    #print('zerork for phi='+ str(phi) + ' at '+ str(atm)+'atm' + ' and '+str(T0)+'K')
+    #print('<'*30)
     
     p = ct.one_atm * atm
 
@@ -319,8 +319,8 @@ def zerork(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names, rxn_eq
         print(f"Zero-rk failed: {atm}, {T0}, {phi}")
         raise ValueError
 
-    print('n_points = ' + str(len(raw['axis0'])))
-    print('CPU time = '+str(time.time() - cpu0))
+    #print('n_points = ' + str(len(raw['axis0'])))
+    #print('CPU time = '+str(time.time() - cpu0))
 
     if dir_raw is not None:
         path_raw = os.path.join(dir_raw,'raw.npz')
@@ -408,19 +408,19 @@ def zerork_psr(dir_desk, tau, p, T0, fuel_fracs, oxid_fracs, phi, species_names,
     #    print(f"Zero-rk failed: {p}, {T0}, {phi}")
     #    raise ValueError
 
-    if(raw):
-        print('n_points = ' + str(len(raw['axis0'])))
-    else:
-        print("No data from Zero-RK")
-    print('CPU time = '+str(time.time() - cpu0))
+#    if(raw):
+#        print('n_points = ' + str(len(raw['axis0'])))
+#    else:
+#        print("No data from Zero-RK")
+#    print('CPU time = '+str(time.time() - cpu0))
     return raw
 
 
 def zerork_S_curve(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names, rxn_equations, eps=0.005, dir_raw=None):
 
-    print('>'*30)
-    print('zerork S-curve for phi='+ str(phi) + ' at '+ str(atm)+'atm' + ' and '+str(T0)+'K')
-    print('<'*30)
+    #print('>'*30)
+    #print('zerork S-curve for phi='+ str(phi) + ' at '+ str(atm)+'atm' + ' and '+str(T0)+'K')
+    #print('<'*30)
     
     if len(species_names) > 100:
         verbose = True
@@ -437,7 +437,7 @@ def zerork_S_curve(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names
     tau_r = 0.5
 
     while True:
-        print(f'tau: phi={phi} at {atm} atm and {T0} K : {tau}, {tau_r}')
+        #print(f'tau: phi={phi} at {atm} atm and {T0} K : {tau}, {tau_r}')
         full_fracs=None
         #if(raw_burn):
         #    full_fracs = { x[0]: x[1] for x in zip(species_names, np.ravel(raw_burn['mole_fraction'][-1,:])) }
@@ -448,21 +448,21 @@ def zerork_S_curve(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names
         else: 
             T = raw["temperature"][-1]
 
-        print(f'T: phi={phi} at {atm} atm and {T0} K : {T}, {T_burn}')
+        #print(f'T: phi={phi} at {atm} atm and {T0} K : {T}, {T_burn}')
         if T_burn is None:
             T_burn = T
 
         if abs(T_burn - T) > 50:
             # if extinction happens or dT too large
-            if tau_r > 0.999:
-                if verbose:            
-                    print('finished, tau_r = '+str(tau_r))
+            if tau_r > 0.995:
+                #if verbose:            
+                #    print('finished, tau_r = '+str(tau_r))
                 break
             else:
                 tau = tau_burn
                 tau_r = tau_r + (1-tau_r)*0.5
-                if verbose:            
-                    print('refined, tau_r = '+str(tau_r))
+                #if verbose:            
+                #    print('refined, tau_r = '+str(tau_r))
         else:
             T_burn = T
             tau_burn = tau
@@ -504,9 +504,9 @@ def zerork_S_curve(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names
 def zerork_premix(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names, rxn_equations, eps=0.005, dir_raw=None):
     cpu0 = time.time()
 
-    print('>'*30)
-    print('zerork premix for phi='+ str(phi) + ' at '+ str(atm)+'atm' + ' and '+str(T0)+'K')
-    print('<'*30)
+    #print('>'*30)
+    #print('zerork premix for phi='+ str(phi) + ' at '+ str(atm)+'atm' + ' and '+str(T0)+'K')
+    #print('<'*30)
     
     if len(species_names) > 100:
         verbose = True
@@ -604,16 +604,16 @@ def zerork_premix(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names,
         raw['axis0'] = resample_x
 
     if(raw):
-        print('n_points = ' + str(len(raw['axis0'])))
+        #print('n_points = ' + str(len(raw['axis0'])))
         if dir_raw is not None:
             path_raw = os.path.join(dir_raw,'raw.npz')
             raw = save_raw_npz(raw, path_raw)
             save_raw_csv(raw, species_names, rxn_equations, dir_raw)
-    else:
-        print("No data from Zero-RK")
+    #else:
+    #    print("No data from Zero-RK")
 
 
-    print('CPU time = '+str(time.time() - cpu0))
+    #print('CPU time = '+str(time.time() - cpu0))
     return raw
 
 

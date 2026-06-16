@@ -116,14 +116,14 @@ def parse_CKSoln(csv_name, mechanism, raw, section):
 
     # then, read numbers ------------------------------------------------
 
-    numbers = np.matrix(np.loadtxt(csv_name, delimiter=',', skiprows=1, dtype=float))
+    numbers = np.loadtxt(csv_name, delimiter=',', skiprows=1, dtype=float)
     nx = numbers.shape[0]
 
     if raw['mole_fraction'] is None:
-        raw['mole_fraction'] = np.matrix(np.ndarray([nx,n_sp+1]))
-        raw['net_reaction_rate'] = np.matrix(np.ndarray([nx,n_rxn+1]))
-        raw['forward_reaction_rate'] = np.matrix(np.ndarray([nx,n_rxn+1]))
-        raw['reverse_reaction_rate'] = np.matrix(np.ndarray([nx,n_rxn+1]))
+        raw['mole_fraction'] = np.array([nx,n_sp+1])
+        raw['net_reaction_rate'] = np.array([nx,n_rxn+1])
+        raw['forward_reaction_rate'] = np.array([nx,n_rxn+1])
+        raw['reverse_reaction_rate'] = np.array([nx,n_rxn+1])
 
     if j_T >= 0:
         raw['temperature'] = numbers[:,j_T]
@@ -196,7 +196,7 @@ build rawdata from various source
 
 def build_raw(case_folder, mechanism, source='cksoln', overwrite=False):
 
-    # output: numpy matrix
+    # output: numpy array
 
 
     #print overwrite
@@ -207,7 +207,7 @@ def build_raw(case_folder, mechanism, source='cksoln', overwrite=False):
             raw_file = np.load(open(path_raw, 'rb'))
             raw = dict()
             for key in raw_file.keys():
-                raw[key] = np.matrix(raw_file[key])
+                raw[key] = raw_file[key]
             raw['axis0_type'] = str(raw_file['axis0_type'])
             return raw
         except IOError:

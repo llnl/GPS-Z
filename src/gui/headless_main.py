@@ -109,5 +109,5 @@ class headless_main(object):
         #run_GPSA(self, None)            
 
 if __name__ == '__main__':
-    set_start_method("spawn")
+    #set_start_method("spawn")
     headless_main()

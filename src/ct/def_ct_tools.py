@@ -141,10 +141,7 @@ def load_raw(path_raw):
     raw_file = np.load(open(path_raw, 'rb'))
     raw = dict()
     for key in raw_file.keys():
-        if key in ['mole_fraction','net_reaction_rate']:
-            raw[key] = np.matrix(raw_file[key])
-        else:
-            raw[key] = raw_file[key]
+        raw[key] = raw_file[key]
     return raw
     
 
@@ -152,10 +149,7 @@ def save_raw_npz(raw0, path_raw):
 
 	raw = dict()
 	for key in raw0.keys():
-		if key in ['net_reaction_rate','mole_fraction','mass_fraction']:
-			raw[key] = np.matrix(raw0[key])
-		else:
-			raw[key] = raw0[key]
+		raw[key] = raw0[key]
 
 	if path_raw is not None:
 		np.savez(path_raw, **raw)

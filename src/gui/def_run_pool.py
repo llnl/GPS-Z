@@ -209,7 +209,7 @@ def raw_single_mech(list_db, parent, dv_mech, v, dir_desk, bar='train'):
                             parent.n_digit])
 
         with PoolWrapper() as p:
-            _ = list(tqdm(p.imap(do_run, inputs_array), total=len(inputs_array), desc=f"{db_name}({reactor})"))
+            _ = list(tqdm(p.imap_unordered(do_run, inputs_array), total=len(inputs_array), desc=f"{db_name}({reactor})"))
 
     return v
 
