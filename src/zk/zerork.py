@@ -112,9 +112,12 @@ write_step_rates_to_field_files: y
 write_mole_fractions_to_field_files: y
 """
 
-ZERORK_HOME=os.getenv("ZERORK_HOME", default='/usr/apps/advcomb')
-ZERORK_EXE=os.path.join(ZERORK_HOME, "bin", "constVolumeWSR.x")
-ZERORK_PSR_EXE=os.path.join(ZERORK_HOME, "bin", "constVolumePSR.x")
+ZERORK_EXE="constVolumeWSR.x"
+ZERORK_PSR_EXE="constVolumePSR.x"
+ZERORK_HOME=os.getenv("ZERORK_HOME")
+if( ZERORK_HOME ):
+    ZERORK_EXE=os.path.join(ZERORK_HOME, "bin", ZERORK_EXE)
+    ZERORK_PSR_EXE=os.path.join(ZERORK_HOME, "bin", ZERORK_PSR_EXE)
 
 def read_zerork_outfile(zerork_out):
     start_data=False
