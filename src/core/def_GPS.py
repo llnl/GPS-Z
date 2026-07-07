@@ -7,9 +7,6 @@ from src.core.def_build_graph import *
 
 __author__ = 'Xiang Gao'
 
-
-
-
 def find_hubs(score, iso, alpha, gamma=None):
 
     if iso == None:
@@ -72,11 +69,6 @@ def find_hubs(score, iso, alpha, gamma=None):
                 iso_kept[iso_name]['kept'] = members_kept
 
     return hubs, iso_kept
-
-
-
-
-
 
 
 
@@ -170,7 +162,7 @@ def GPS_algo(soln, flux_graph, source, target, path_save=None, \
                     pp0 = [p0]
                     pp1 = [p1]
                 except:# nx.NetworkXNoPath:
-                    print('no path found for: '+str(source)+' --> '+str(hub)+' --> '+str(target))
+                    #print('no path found for: '+str(source)+' --> '+str(hub)+' --> '+str(target))
                     pass
 
             if bool(pp0):

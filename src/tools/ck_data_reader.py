@@ -207,8 +207,8 @@ def compress_raw(raw):
 	raw_c = dict()
 	for k in raw.keys():
 		if k in ['net_reaction_rate','mole_fraction']:
-			M = [np.matrix(raw[k])[i,:].tolist()[0] for i in ii]
-			raw_c[k] = np.matrix(M)
+			M = [np.array(raw[k])[i,:].tolist()[0] for i in ii]
+			raw_c[k] = np.array(M)
 		elif k == 'axis0_type':
 			raw_c[k] = str(raw[k])
 		else:
