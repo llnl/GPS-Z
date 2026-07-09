@@ -44,7 +44,7 @@ from .dialog_about import dialog_about
 from .dialog_database import dialog_database
 from .dialog_mech import dialog_mech
 from .dialog_view_mech import dialog_view_mech
-from .def_run import *
+from .def_run_serial import *
 from .dialog_comb_sk import dialog_comb_sk
 
 from src.post.dialog_post import *
@@ -855,3 +855,4 @@ class window_main(common):
 
 if __name__ == '__main__':
 	window_main()
+

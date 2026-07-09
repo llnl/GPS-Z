@@ -9,7 +9,7 @@ import os
 import time
 import tempfile
 import subprocess
-import shutil
+from ..tools.rmtree_retry import rmtree_retry
 from flamesolver import *
 
 BASE_YML="""
@@ -297,7 +297,7 @@ def zerork(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names, rxn_eq
             zerork_out=subprocess.check_output([ZERORK_EXE,zerork_infile_name],
                                                 stderr=subprocess.STDOUT,universal_newlines=True, env=env).split('\n')
             raw = read_zerork_outfile(zerork_out)
-            shutil.rmtree(tmpdir)
+            rmtree_retry(tmpdir)
 
         except subprocess.CalledProcessError as e:
             zerork_out_file=open(os.path.join(tmpdir,'zerork.out'),'a')
@@ -375,7 +375,7 @@ def zerork_psr(dir_desk, tau, p, T0, fuel_fracs, oxid_fracs, phi, species_names,
         try:
             zerork_out=subprocess.check_output([ZERORK_PSR_EXE,zerork_infile_name],
                                                 stderr=subprocess.DEVNULL,universal_newlines=True, env=env).split('\n')
-            shutil.rmtree(tmpdir)
+            rmtree_retry(tmpdir)
 
         except subprocess.CalledProcessError as e:
             zerork_out_file=open(os.path.join(tmpdir,'zerork.out'),'a')
@@ -405,7 +405,7 @@ def zerork_psr(dir_desk, tau, p, T0, fuel_fracs, oxid_fracs, phi, species_names,
     #Clean up
     finally:
         pass
-        #shutil.rmtree(tmpdir)
+        #rmtree_retry(tmpdir)
 
     #if(error_return or len(raw['axis0']) == 0):
     #    print(f"Zero-rk failed: {p}, {T0}, {phi}")
@@ -559,7 +559,7 @@ def zerork_premix(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names,
             raw = read_zerork_flame_restart(newest, 'grid_file')
 
             os.chdir(cwd)
-            shutil.rmtree(tmpdir)
+            rmtree_retry(tmpdir)
 
         except subprocess.CalledProcessError as e:
             zerork_out_file=open(os.path.join(tmpdir,'zerork.out'),'a')
@@ -576,7 +576,7 @@ def zerork_premix(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names,
     #Clean up
     finally:
         pass
-        #shutil.rmtree(tmpdir)
+        #rmtree_retry(tmpdir)
 
     #if(error_return or len(raw['axis0']) == 0):
     #    print(f"Zero-rk failed: {p}, {T0}, {phi}")
