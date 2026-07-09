@@ -1,7 +1,11 @@
 # -*- coding: UTF-8 -*-
 
-import sys
 import os
+
+os.environ['OMP_NUM_THREADS'] = "1"
+os.environ['OPENBLAS_NUM_THREADS'] = "1"
+
+import sys
 import json
 import time
 import cantera as ct
@@ -105,11 +109,8 @@ class headless_main(object):
         run_GPS(self)
         #TODO:
         #run_test(self, None)
-        #run_GPSA(self, None)            
 
 if __name__ == '__main__':
     set_start_method(os.getenv('GPS_MP_START_METHOD'))
-    os.environ['OMP_NUM_THREADS'] = 1
-    os.environ['OPENBLAS_NUM_THREADS'] = 1
 
     headless_main()
