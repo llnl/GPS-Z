@@ -120,12 +120,6 @@ class window_main(common):
 			self.init_es_default()
 			#self.init_iso_default()
 
-			self.w.cb_GPSA_traced.clear()
-			for item in ['no filter']+self.soln['detailed'].element_names:
-				self.w.cb_GPSA_traced.addItem(item)
-
-			self.act_GPSA_refresh()
-
 		else:
 			self.w.btn_set_de.setDefault(True)
 			return None
@@ -197,17 +191,6 @@ class window_main(common):
 
 
 
-
-	def act_GPSA_refresh(self):
-		items = ['no filter']
-		for fuel in self.project['fuel'].keys():
-			for sp in self.project['fuel'][fuel]['composition'].keys():
-				if sp not in items:
-					items.append(sp)
-
-		self.w.cb_GPSA_source.clear()
-		for item in items:
-			self.w.cb_GPSA_source.addItem(item)
 
 
 
@@ -617,24 +600,6 @@ class window_main(common):
 			progress.set_value('test',100)
 
 
-		# GPSA ------------
-		
-		if do_task and self.w.gb_GPSA.isChecked():
-
-			if bool(list_train) == False and bool(list_GPS):
-				msg = 'at least one traininig database should be selected \n'+\
-					'(we need it to specify GPS)'
-				QMessageBox.information(QWidget(),'',msg)
-				return None
-
-			progress.set_info('='*10 + ' performing GPSA' + '='*10)
-			has_task = True
-			do_task = run_GPSA(self, progress)			
-			progress.set_info('='*10 + ' GPSA finished' + '='*10 + '\n'*5)
-
-		else:
-			progress.set_value('GPS',100)
-
 
 
 		# finished ------------
@@ -819,7 +784,6 @@ class window_main(common):
 		self.w.btn_view_de.clicked.connect(self.act_view_de)
 		self.w.btn_set_de.clicked.connect(self.act_edit_de)
 
-		self.w.btn_GPSA_refresh.clicked.connect(self.act_GPSA_refresh)
 		self.w.btn_run.clicked.connect(self.act_run)
 
 		self.w.table_db.clicked.connect(self.update_train_name)
@@ -834,11 +798,6 @@ class window_main(common):
 		self.sub['set_viewer'] = [self.set_table_db, self.set_list, self.set_list]
 
 		self.init_prj_default()
-
-
-		for item in ['no filter','with alias only']:
-			self.w.cb_GPSA_alias.addItem(item)
-		self.w.cb_GPSA_source.addItem('no filter')
 
 
 

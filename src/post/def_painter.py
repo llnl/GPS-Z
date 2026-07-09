@@ -11,9 +11,7 @@ import matplotlib.pyplot as plt
 from networkx.readwrite import json_graph
 
 from src.core.def_tools import cond2dir, keys_sorted
-from src.core.def_GPSA import *
 from src.ct.def_ct_tools import load_raw
-from src.gui.def_run import load_dR
 import sys
 import os
 import cantera as ct
