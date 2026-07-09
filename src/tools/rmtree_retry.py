@@ -2,7 +2,7 @@
 import time
 import shutil
 
-def rmtree_retry(directory, ntries=4):
+def rmtree_retry(directory, ntries=8):
     for _ in range(ntries):
         try:
             return shutil.rmtree(directory)
