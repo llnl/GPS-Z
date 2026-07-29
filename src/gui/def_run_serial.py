@@ -78,6 +78,7 @@ class dialog_progress(object):
         self.w.accept()
 
     def __init__(self, parent):
+
         ui_name = 'progress.ui'
         self.parent = parent
         self.stop = False

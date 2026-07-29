@@ -23,11 +23,11 @@
       <x>20</x>
       <y>100</y>
       <width>371</width>
-      <height>331</height>
+      <height>316</height>
      </rect>
     </property>
     <property name="title">
-     <string>training/testing database</string>
+     <string>kinetic databases</string>
     </property>
     <property name="flat">
      <bool>true</bool>
@@ -101,7 +101,7 @@
        <x>20</x>
        <y>60</y>
        <width>331</width>
-       <height>251</height>
+       <height>236</height>
       </rect>
      </property>
      <property name="sizePolicy">
@@ -261,9 +261,9 @@
     <property name="geometry">
      <rect>
       <x>400</x>
-      <y>420</y>
+      <y>550</y>
       <width>341</width>
-      <height>221</height>
+      <height>81</height>
      </rect>
     </property>
     <property name="title">
@@ -279,7 +279,7 @@
      <property name="geometry">
       <rect>
        <x>130</x>
-       <y>180</y>
+       <y>40</y>
        <width>200</width>
        <height>32</height>
       </rect>
@@ -294,9 +294,9 @@
     <widget class="QCheckBox" name="ck_train">
      <property name="geometry">
       <rect>
-       <x>13</x>
-       <y>30</y>
-       <width>85</width>
+       <x>10</x>
+       <y>22</y>
+       <width>75</width>
        <height>18</height>
       </rect>
      </property>
@@ -310,8 +310,8 @@
     <widget class="QCheckBox" name="ck_GPS">
      <property name="geometry">
       <rect>
-       <x>130</x>
-       <y>30</y>
+       <x>80</x>
+       <y>22</y>
        <width>101</width>
        <height>18</height>
       </rect>
@@ -323,11 +323,43 @@
       <bool>false</bool>
      </property>
     </widget>
+    <widget class="QCheckBox" name="ck_sens">
+     <property name="geometry">
+      <rect>
+       <x>130</x>
+       <y>22</y>
+       <width>101</width>
+       <height>18</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>sensitivity</string>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+    </widget>
+    <widget class="QCheckBox" name="ck_tune">
+     <property name="geometry">
+      <rect>
+       <x>215</x>
+       <y>22</y>
+       <width>85</width>
+       <height>18</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>tuning</string>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+    </widget>
     <widget class="QCheckBox" name="ck_test">
      <property name="geometry">
       <rect>
-       <x>250</x>
-       <y>30</y>
+       <x>278</x>
+       <y>22</y>
        <width>85</width>
        <height>18</height>
       </rect>
@@ -340,6 +372,7 @@
      </property>
     </widget>
    </widget>
+
    <widget class="QGroupBox" name="gb_GPS">
     <property name="enabled">
      <bool>true</bool>
@@ -432,7 +465,8 @@
      </property>
     </widget>
    </widget>
-   <widget class="QGroupBox" name="gb_sk">
+
+   <widget class="QGroupBox" name="gb_sens">
     <property name="enabled">
      <bool>true</bool>
     </property>
@@ -441,7 +475,193 @@
       <x>400</x>
       <y>100</y>
       <width>351</width>
-      <height>321</height>
+      <height>146</height>
+     </rect>
+    </property>
+    <property name="title">
+     <string>sensitivity</string>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <widget class="QPushButton" name="btn_del_sens">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>150</x>
+       <y>20</y>
+       <width>81</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>delete</string>
+     </property>
+     <property name="autoDefault">
+      <bool>false</bool>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="btn_edit_sens">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>80</x>
+       <y>20</y>
+       <width>81</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>edit</string>
+     </property>
+     <property name="autoDefault">
+      <bool>false</bool>
+     </property>
+     <property name="flat">
+      <bool>false</bool>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="btn_add_sens">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>20</y>
+       <width>81</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>add</string>
+     </property>
+     <property name="autoDefault">
+      <bool>false</bool>
+     </property>
+    </widget>
+    <widget class="QListView" name="list_sens">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>60</y>
+       <width>331</width>
+       <height>81</height>
+      </rect>
+     </property>
+    </widget>
+   </widget>
+
+   <widget class="QGroupBox" name="gb_tune">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>400</x>
+      <y>250</y>
+      <width>351</width>
+      <height>146</height>
+     </rect>
+    </property>
+    <property name="title">
+     <string>tuning</string>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <widget class="QPushButton" name="btn_del_tune">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>150</x>
+       <y>20</y>
+       <width>81</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>delete</string>
+     </property>
+     <property name="autoDefault">
+      <bool>false</bool>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="btn_edit_tune">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>80</x>
+       <y>20</y>
+       <width>81</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>edit</string>
+     </property>
+     <property name="autoDefault">
+      <bool>false</bool>
+     </property>
+     <property name="flat">
+      <bool>false</bool>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="btn_add_tune">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>20</y>
+       <width>81</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>add</string>
+     </property>
+     <property name="autoDefault">
+      <bool>false</bool>
+     </property>
+    </widget>
+    <widget class="QListView" name="list_tune">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>60</y>
+       <width>331</width>
+       <height>81</height>
+      </rect>
+     </property>
+    </widget>
+   </widget>
+
+   <widget class="QGroupBox" name="gb_sk">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>400</x>
+      <y>400</y>
+      <width>351</width>
+      <height>146</height>
      </rect>
     </property>
     <property name="title">
@@ -516,10 +736,10 @@
      </property>
      <property name="geometry">
       <rect>
-       <x>0</x>
+       <x>10</x>
        <y>60</y>
        <width>331</width>
-       <height>251</height>
+       <height>81</height>
       </rect>
      </property>
     </widget>
@@ -543,6 +763,7 @@
      </property>
     </widget>
    </widget>
+
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <widget class="QMenuBar" name="menubar">

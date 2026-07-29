@@ -83,6 +83,8 @@ class dialog_database(base_dialog):
 		self.data['T0'] = []
 		self.data['atm'] = [1, 5, 30]
 		self.data['train'] = True
+		self.data['sens'] = False
+		self.data['tune'] = False
 		self.data['test'] = True
 		self.data['name'] = self.new_name('database', self.occupied)
 		self.data['case'] = []

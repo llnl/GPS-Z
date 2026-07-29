@@ -242,7 +242,7 @@ class base_dialog(common):
 		for i_cb in which:
 			obj = self.w_cbs['obj'][i_cb]
 			key = self.w_cbs['key'][i_cb]
-			items = [''] + list(self.w_cbs['items'][i_cb])
+			items = list(self.w_cbs['items'][i_cb])
 			index = 0
 
 			obj.clear()

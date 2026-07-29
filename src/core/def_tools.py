@@ -1,6 +1,7 @@
+import os
+
 import numpy as np
 import matplotlib.pylab as plt
-import os
 import cantera as ct
 
 __author__ = 'Xiang Gao'
@@ -99,6 +100,58 @@ def para2dir_GPS(dir_public, train_name, \
 
     para_str = 'K' + str(int(K))  +  '_b' + num2str(beta,d) + '_a' + num2str(alpha,d)
     return os.path.join(dir_public, 'GPS', train_name, para_str, extra_setting)
+
+
+def get_GPS_mechs(parent):
+    dir_public = parent.project['dir_public']
+    train_name = parent.train_name
+    GPS_mechs = {}
+
+    list_GPS = []
+    for GPS_name in parent.project['GPS'].keys():
+        if parent.project['GPS'][GPS_name]['checked']:
+            list_GPS.append(GPS_name)
+
+    for GPS_name in list_GPS:
+
+        GPS = parent.project['GPS'][GPS_name]
+        alpha_list = GPS['alpha']
+        beta_list = GPS['beta']
+        K_list = GPS['K']
+        must_keep = GPS['must_keep']
+
+        es_name = GPS['es']
+        es = parent.project['es'][es_name]
+        traced_list = []
+        for e in es['element'].keys():
+            if es['element'][e]['traced']:
+                traced_list.append(e)
+
+        if GPS['iso_enable']:
+            iso_name = GPS['iso']
+            iso = parent.project['iso'][iso_name]
+            gamma_list = GPS['gamma']
+        else:
+            iso_name = None
+            iso = None
+            gamma_list = [None]
+
+        for K in K_list:
+            for beta in beta_list:
+                for alpha in alpha_list:
+                    for gamma in gamma_list:
+                        dir_sk = para2dir_GPS(dir_public, train_name, \
+                            alpha=alpha, K=K, beta=beta, \
+                            es_name=es_name, iso_name=iso_name, \
+                            d=parent.n_digit, gamma=gamma)
+
+                        dir_mech_sk = os.path.join(dir_sk,'mech')
+                        path_yaml_sk = os.path.join(dir_mech_sk,'chem.yaml')
+
+                        if os.path.exists(path_yaml_sk):
+                            mech_name = f'{GPS_name}_K{K}_b{beta}_a{alpha}'
+                            GPS_mechs[mech_name] = dir_sk
+    return GPS_mechs
 
 def para2dir_PFA(dir_public, train_name, crit, d=4):
     return os.path.join(dir_public, 'PFA', train_name, num2str(crit,d))
