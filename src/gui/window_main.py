@@ -1,6 +1,5 @@
 # -*- coding: UTF-8 -*-
 
-
 # =======================================
 #
 # copyright: Xiang Gao, 2016
@@ -30,6 +29,9 @@ import time
 import cantera as ct
 import shutil
 import copy
+import traceback
+
+from multiprocessing import set_start_method
 
 from PyQt5 import uic
 from PyQt5.QtGui import *
@@ -47,12 +49,54 @@ from .dialog_sensitivity import dialog_sensitivity
 from .dialog_tuning import dialog_tuning
 from .dialog_mech import dialog_mech
 from .dialog_view_mech import dialog_view_mech
-#from .def_run_serial import *
 from .def_run_pool import *
 from .dialog_comb_sk import dialog_comb_sk
 
 from src.post.dialog_post import *
 from src.post.dialog_rename import *
+
+
+class task_runner(QObject):
+    #Signals have to be at class body
+    progress_signal = pyqtSignal(int)
+    finished = pyqtSignal()
+
+    def __init__(self, tasks, parent):
+        super().__init__()
+        assert(tasks)
+        self._is_running = True
+        self.tasks = tasks
+        self.parent = parent
+        self.signal_out = None
+
+    def stop(self):
+        self._is_running = False
+
+    def run(self):
+        current_thread = QThread.currentThread()
+        for t in self.tasks:
+            if current_thread.isInterruptionRequested():
+                break
+            f = t['function']
+            b = t['pbar']
+            n = t['name']
+            if(self.signal_out):
+                self.progress_signal.disconnect(self.signal_out)
+            self.signal_out = b.setValue
+            self.progress_signal.connect(self.signal_out)
+            self.parent.progress_stream.messages.emit(f"STARTING: {n}")
+            f(self.parent, self.progress_signal)
+            self.parent.progress_stream.messages.emit(f"DONE: {n}")
+
+        self.finished.emit()
+
+class qtext_stream(QObject):
+    messages = pyqtSignal(str)
+
+    def write(self, text):
+        if text.strip():  # Send non-empty text to UI thread
+            self.messages.emit(str(text))
+    def flush(self): pass
 
 
 class window_main(common):
@@ -89,7 +133,7 @@ class window_main(common):
         # if dir_public is ok
         OK_dir = (self.project['dir_public'] != None)
         self.w.menu_save.setEnabled(OK_dir)
-        self.w.menu_comb_sk.setEnabled(OK_dir)
+        #self.w.menu_comb_sk.setEnabled(OK_dir)
         self.w.menu_post.setEnabled(OK_dir)
         self.w.gb_sk.setEnabled(OK_dir)
         self.w.btn_set_de.setEnabled(OK_dir)
@@ -154,8 +198,8 @@ class window_main(common):
             n_row += 1
 
         self.w.table_db.setModel(model)
-        self.w.table_db.setColumnWidth(0, 215)
-        self.w.table_db.setColumnWidth(1, 55)
+        self.w.table_db.setColumnWidth(0, 205)
+        self.w.table_db.setColumnWidth(1, 65)
         self.w.table_db.setColumnWidth(2, 55)
 
         for i_row in range(n_row):
@@ -260,7 +304,9 @@ class window_main(common):
 
         gps_mechs = get_GPS_mechs(self)
         if(mech_name in gps_mechs):
-            return get_lwsoln(gps_mechs[mech_name])
+            dir_gps = gps_mechs[mech_name]
+            path_yaml = os.path.join(dir_gps,'mech','chem.yaml')
+            return get_lwsoln(path_yaml)
 
         return None
 
@@ -481,8 +527,8 @@ class window_main(common):
     def act_post(self):
         dialog_post(parent=self)
 
-    def act_rename(self):
-        dialog_rename(parent=self)
+#    def act_rename(self):
+#        dialog_rename(parent=self)
 
     def act_comb_sk(self):
         dialog_comb_sk(parent=self)
@@ -515,78 +561,66 @@ class window_main(common):
         #list_PFA = self.read_list('PFA')
         list_sk = self.read_list('mech')
         list_sens = self.read_list('sens')
+        list_tune = self.read_list('tune')
         list_train, list_test = self.read_table_db('database')
-        
-        has_task = False
-        do_task = True
+       
+        do_train = bool(list_train) and self.w.ck_train.isChecked()
+        do_GPS = bool(list_GPS) and self.w.ck_GPS.isChecked()
+        do_sens = bool(list_sens) and self.w.ck_sens.isChecked()
+        do_tune = bool(list_tune) and self.w.ck_tune.isChecked()
+        do_test = bool(list_test) and self.w.ck_test.isChecked()
 
-        progress = dialog_progress(self)
+        if(not any([do_train, do_GPS, do_sens, do_tune, do_test])):
+            return
+
+        self.progress = dialog_progress(self)
+
+        #Output progress to info box
+        self.progress_text = self.progress.w.txt_info
+        self.progress_stream = qtext_stream()
+        self.progress_stream.messages.connect(self.progress_text.append)
+        self.progress_stream.messages.connect(self.progress.statusPictureSetter)
+
+        self.work_thread = QThread()
+        tasks = []
 
         # training ------------
-        if self.w.ck_train.isChecked():
-            if bool(list_train) == False:
-                msg = 'no training database selected'
-                QMessageBox.information(QWidget(),'',msg)
-                return None
-
-            progress.set_info('='*10 + ' calculating training database' + '='*10)
-            has_task = True
-            do_task = run_train(self, progress)
-            progress.set_info('='*10 + ' training finished' + '='*10 + '\n'*5)
-
-        else:
-            progress.set_value('train',100)
-
+        if do_train:
+            tasks.append({"function": run_train, "pbar": self.progress.w.bar_train, "name": "train"})
 
         # GPS ------------
         
-        if bool(list_GPS) and do_task and self.w.ck_GPS.isChecked():
-
-            if bool(list_train) == False and bool(list_GPS):
-                msg = 'at least one traininig database should be selected \n'+\
-                    '(we need it to specify GPS)'
-                QMessageBox.information(QWidget(),'',msg)
-                return None
-
-            progress.set_info('='*10 + ' performing GPS' + '='*10)
-            has_task = True
-            do_task = run_GPS(self, progress)            
-            progress.set_info('='*10 + ' GPS finished' + '='*10 + '\n'*5)
-
-        else:
-            progress.set_value('GPS',100)
+        if do_GPS:
+            tasks.append({"function": run_GPS, "pbar": self.progress.w.bar_GPS, "name": "GPS"})
 
         # sensitivity ------------
-        if bool(list_sens) and self.w.ck_sens.isChecked():
-            progress.set_info('='*10 + ' performing sensitivity' + '='*10)
-            has_task = True
-            run_sens(self, progress)            
-            progress.set_info('='*10 + ' sensitivity finished' + '='*10 + '\n'*5)
-        else:
-            progress.set_value('sensitivity',100)
+        if do_sens:
+            tasks.append({"function": run_sens, "pbar":
+                          self.progress.w.bar_sensitivity, "name": "sensitivity"})
+
+        # tuning ------------
+        if do_tune:
+            tasks.append({"function": run_tune, "pbar":
+                          self.progress.w.bar_tuning, "name": "tuning"})
 
         # testing ------------
-        if do_task and self.w.ck_test.isChecked():
-            has_task = True
-            do_task = run_test(self, progress)
+        if do_test:
+            tasks.append({"function": run_test, "pbar":
+                          self.progress.w.bar_test, "name": "test"})
 
-        else:
-            progress.set_value('test',100)
+        self.progress.w.btn_stop.clicked.connect(self.work_thread.requestInterruption)
 
+        assert(tasks)
 
-        # finished ------------
+        self.tr = task_runner(tasks, self)
+        self.tr.moveToThread(self.work_thread)
+        self.work_thread.started.connect(self.tr.run)
+        self.tr.finished.connect(self.work_thread.quit)
+        self.tr.finished.connect(self.tr.deleteLater)
+        self.work_thread.finished.connect(self.work_thread.deleteLater)
+        self.work_thread.finished.connect(self.progress.close)
+        self.work_thread.start()
 
-        if not has_task:
-            msg = 'no task selected'
-            QMessageBox.information(QWidget(),'',msg)
-        else:
-            if progress.stop:
-                msg = 'manually stopped'
-            else:
-                msg = 'all tasks finished'
-            QMessageBox.information(QWidget(),'',msg)
-
-        progress.f.close()
 
     
     """  ============================
@@ -652,7 +686,8 @@ class window_main(common):
         self.project['sens'] = dict()
         self.project['tune'] = dict()
         self.project['mech'] = dict()
-        self.project['mech']['detailed'] = {'name':'detailed', 'chem':'', 'therm':'', 'desk':''}
+        self.project['mech']['detailed'] = {'name':'detailed', 'chem':'',
+                                            'therm':'', 'trans':'', 'desk':''}
         self.project['es'] = dict()
         self.project['rename'] = dict()
         self.project['version'] = self.version_info
@@ -660,7 +695,9 @@ class window_main(common):
 
     def __init__(self):
 
-        self.version_info = "GPS v2.0, copyright © Xiang Gao, Prof. Wenting Sun's group @ Georgia Tech"
+        set_start_method(os.getenv('GPS_MP_START_METHOD'))
+
+        self.version_info = "GPS-Z v3.0"
 
 
         # self.variables ============================
@@ -673,8 +710,6 @@ class window_main(common):
         else:
             self.dir_parent = self.cwd
         self.dir_ui = os.path.join(self.dir_parent,'ui')
-
-        os.environ['GPS_NUM_PROCS'] = "1"
 
         self.soln = dict()
         self.soln_in = dict()
@@ -703,9 +738,9 @@ class window_main(common):
         self.w.menu_save.triggered.connect(self.act_save_prj)
         self.w.menu_save.setShortcut('Ctrl+S')
         self.w.menu_postprocessor.triggered.connect(self.act_post)
-        self.w.menu_about.triggered.connect(self.act_about)
-        self.w.menu_comb_sk.triggered.connect(self.act_comb_sk)
-        self.w.menu_rename.triggered.connect(self.act_rename)
+        #self.w.menu_about.triggered.connect(self.act_about)
+        #self.w.menu_comb_sk.triggered.connect(self.act_comb_sk)
+        #self.w.menu_rename.triggered.connect(self.act_rename)
 
         self.w.btn_add_db.clicked.connect(self.act_add_db)
         self.w.btn_edit_db.clicked.connect(self.act_edit_db)
@@ -763,7 +798,6 @@ class window_main(common):
     """ 
         end of 0. window_main
     ----------------------------------------------------<<<<<<<<<<<< """
-
 
 if __name__ == '__main__':
     window_main()

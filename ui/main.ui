@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>GPS v2.0</string>
+   <string>GPS-Z</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <widget class="QGroupBox" name="gb_db">
@@ -785,22 +785,22 @@
     <addaction name="separator"/>
     <addaction name="menu_save"/>
    </widget>
-   <widget class="QMenu" name="menuHelp">
+   <!-- <widget class="QMenu" name="menuHelp">
     <property name="title">
      <string>help</string>
     </property>
     <addaction name="menu_about"/>
-   </widget>
+   </widget> -->
    <widget class="QMenu" name="menuTools">
     <property name="title">
      <string>tools</string>
     </property>
-    <addaction name="menu_comb_sk"/>
+    <!-- <addaction name="menu_comb_sk"/> -->
     <addaction name="menu_postprocessor"/>
-    <addaction name="menu_rename"/>
+    <!-- <addaction name="menu_rename"/> -->
    </widget>
    <addaction name="menuProject"/>
-   <addaction name="menuHelp"/>
+   <!-- <addaction name="menuHelp"/> -->
    <addaction name="menuTools"/>
   </widget>
   <action name="menu_load">
@@ -896,11 +896,11 @@
     <string>about</string>
    </property>
   </action>
-  <action name="menu_about">
+  <!--  <action name="menu_about">
    <property name="text">
     <string>about</string>
    </property>
-  </action>
+  </action> -->
   <action name="menu_comb_sk">
    <property name="text">
     <string>combine sk</string>

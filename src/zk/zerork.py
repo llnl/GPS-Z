@@ -240,16 +240,22 @@ def read_zerork_flame_restart(restart_file, grid_file):
 
     return raw
 
-def read_zerork_sensitivity_reactions(sens_filename):
+def read_zerork_sensitivity_reactions(sens_filename, rxn_equations):
     rxns = {"indexes": [], "srel": [], "equations": []}
     with open(sens_filename,'r') as sens_file:
         for line in sens_file:
             if line[0] == "#":
                 continue
             tokens = line.split()
-            rxns['indexes'].append(int(tokens[0]) - 1)
+            idx = int(tokens[0]) - 1
+            rxns['indexes'].append(idx)
             rxns['srel'].append(float(tokens[1]))
-            rxns['equations'].append( " ".join(tokens[2:]) )
+            #TODO: error if zerork and cantera reactions don't match?
+            #      (they should since we write the ck mech from the yaml)
+            #zk_rxn = " ".join(tokens[2:])
+            #ct_rxn = rxn_equations[idx]
+            #print(f'"{zk_rxn}", "{ct_rxn}"')
+            rxns['equations'].append( rxn_equations[idx] )
     return rxns
 
 
@@ -681,7 +687,7 @@ def zerork_sensitivity(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_n
             #else:
             zerork_out=subprocess.check_output([ZERORK_SENS_EXE,zerork_infile_name],
                                                 stderr=subprocess.STDOUT,universal_newlines=True, env=env).split('\n')
-            reaction_dict = read_zerork_sensitivity_reactions('sensAnalysis_IDT_run000.txt')
+            reaction_dict = read_zerork_sensitivity_reactions('sensAnalysis_IDT_run000.txt', rxn_equations)
             if dir_raw is not None:
                 path_raw = os.path.join(dir_raw,'raw.npz')
                 for k in ['indexes','srel','equations']:

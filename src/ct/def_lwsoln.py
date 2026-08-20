@@ -22,15 +22,19 @@ class lwsoln(object):
         self.species_names = heavy_soln.species_names
         self.species_dict = {}
         for i in range(heavy_soln.n_species):
-            spec_dict = {}
             n = heavy_soln.species(i).name
             c = heavy_soln.species(i).composition
             self.species_dict[n] = lwspecies(c)
 
         self.reaction_equations_list = heavy_soln.reaction_equations()
+        self.reaction_mw = [0]*heavy_soln.n_reactions
         self.reaction_dict = {}
         for i in range(heavy_soln.n_reactions):
             self.reaction_dict[i] = lwreaction(heavy_soln.reaction(i))
+            for sp_name in heavy_soln.reaction(i).reactants:
+                sp_mw = heavy_soln.species(sp_name).molecular_weight
+                sp_amount = heavy_soln.reaction(i).reactants[sp_name]
+                self.reaction_mw[i] += sp_amount*sp_mw
 
         self.n_reactions = heavy_soln.n_reactions
 

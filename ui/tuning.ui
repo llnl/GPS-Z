@@ -206,8 +206,8 @@
      <widget class="QPushButton" name="btn_del_rxn">
       <property name="geometry">
        <rect>
-        <x>376</x>
-        <y>244</y>
+        <x>371</x>
+        <y>180</y>
         <width>61</width>
         <height>26</height>
        </rect>

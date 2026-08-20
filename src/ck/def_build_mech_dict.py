@@ -128,7 +128,7 @@ def read_cheminp(path):
             # if this line is not empty after being cleaned
             # figure out which section I'm reading
 
-            if re.search('element', line, re.IGNORECASE):
+            if re.search('elem', line, re.IGNORECASE):
                 section = 1
             elif re.search('species', line, re.IGNORECASE):
                 section = 2

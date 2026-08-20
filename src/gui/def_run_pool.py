@@ -6,6 +6,7 @@ import time
 import cantera as ct
 import shutil
 import copy
+import contextlib
 from collections import defaultdict
 from multiprocessing import Pool
 from tqdm import tqdm
@@ -17,12 +18,14 @@ from src.ct.senkin import senkin
 from src.ct.psr import S_curve
 from src.ck.def_cheminp import skeletal
 from src.ct.ck2yaml_GPS import ck2yaml
+from src.ct.yaml2ck import yaml2ck
 
 from src.ct.def_ct_tools import load_raw
 from src.ct.def_lwsoln import get_lwsoln
 from src.core.def_GPS import GPS_algo
 from src.core.def_build_graph import build_flux_graph
 
+from zerork.rate_opt import mech_optimizer, cv_opt, psr_opt, premix_opt
 
 """ >>>>>>>>>>>>>------------------------------------------------
 0.3. run
@@ -51,14 +54,23 @@ def PoolWrapper(*args, **kwargs):
     else:
         return Pool(*args, **kwargs)
 
+
 class dialog_progress(object):
 
-    def set_value(self, task, value):
-        tasks = ['train','GPS','test']
-        bars = [self.w.bar_train, self.w.bar_GPS, self.w.bar_test]
-        bar = bars[tasks.index(task)]
-        bar.setValue(int(value))
-        self.parent.app.processEvents()
+    def statusPictureSetter(self, text):
+        if("Running tune" in text):
+            dir_tune = text.split(":")[1].strip()
+            self.status_img_path = os.path.join(dir_tune, "history.png")
+        if("DONE: tuning" in text):
+            self.status_img_path = ''
+        if(self.status_img_path and os.path.exists(self.status_img_path)):
+            from PyQt5.QtGui import QPixmap
+            pixmap = QPixmap(self.status_img_path)
+            self.w.lbl_status.setVisible(True)
+            self.w.lbl_status.setPixmap(pixmap)
+            #self.w.lbl_status.resize(550, 200)
+        else:
+            self.w.lbl_status.setVisible(False)
 
     def set_info(self, new_info):
         from PyQt5.QtGui import QTextCursor
@@ -79,7 +91,6 @@ class dialog_progress(object):
             self.w.btn_verbose.setText('concise')
             self.verbose = True
 
-
     def act_stop(self):
         from PyQt5.QtWidgets import QMessageBox, QWidget
         self.stop = True
@@ -87,6 +98,15 @@ class dialog_progress(object):
         QMessageBox.information(QWidget(),'',msg)
 
     def close(self):
+        # finished ------------
+        from PyQt5.QtWidgets import QMessageBox, QWidget
+        if self.stop:
+            msg = 'manually stopped'
+        else:
+            msg = 'all tasks finished'
+        QMessageBox.information(QWidget(),'',msg)
+
+        self.f.close()
         self.w.accept()
 
     def __init__(self, parent):
@@ -95,46 +115,26 @@ class dialog_progress(object):
         self.parent = parent
         self.stop = False
         self.verbose = False
+        self.status_img_path = ''
         self.dir_public = self.parent.project['dir_public']
         self.f = open(os.path.join(self.dir_public,'log.txt'),'w')
 
         self.w = uic.loadUi(os.path.join(parent.dir_ui, ui_name))
         self.w.btn_stop.clicked.connect(self.act_stop)
-        self.w.btn_verbose.clicked.connect(self.act_verbose)
+        #self.w.btn_verbose.clicked.connect(self.act_verbose)
 
-        tasks = ['train','GPS','test']
-        for task in tasks:
-            self.set_value(task,0)
+        self.w.txt_info.setMinimumHeight(300)
+        #tasks = ['train','GPS','test']
+        #for task in tasks:
+        #    self.set_value(task,0)
 
         self.parent.app.processEvents()
         self.w.show()
 
-
-class dialog_progress_headless(object):
-    def set_value(self, task, value):
-        pass
-    def set_info(self, new_info):
-        pass
-    def act_verbose(self):
-        pass
-    def act_stop(self):
-        pass
-    def close(self):
-        pass
-    class _w(object):
-        class label(object):
-            def __init__(self):
-                pass
-            def setText(*args,**kwargs):
-                pass
-        def __init__(self):
-            self.label_test = self.label()
-            self.label_GPS = self.label()
-    def __init__(self, parent):
-        self.parent = parent
-        self.stop = False
-        self.verbose = False
-        self.w = self._w()
+    def closeEvent(self, event):
+        self.parent.work_thread.stop()
+        self.parent.work_thread.wait()
+        event.accept()
 
 
 def write_sk_inp(species_kept, dir_mech_de, dir_mech_sk, notes):
@@ -146,6 +146,7 @@ def write_sk_inp(species_kept, dir_mech_de, dir_mech_sk, notes):
     notes.append('! number of species = '+str(n_sp))
     skeletal(dir_mech_de, dir_mech_sk, species_kept, notes=notes)
     ck2yaml(dir_mech_sk)
+    yaml2ck(dir_mech_sk)
 
     f = open(os.path.join(dir_mech_sk,'ns.txt'),'w')
     f.write(str(n_sp))
@@ -159,6 +160,9 @@ def find_raw(dir_desk, fuel, oxid, phi, atm, T0, reactor, n_digit):
 
     if not os.path.exists(dir_raw):
         os.makedirs(dir_raw)
+
+    cwd = os.getcwd()
+    os.chdir(dir_raw)
 
     path_yaml = os.path.join(dir_desk,"mech","chem.yaml")
     if CANTERA:
@@ -199,6 +203,7 @@ def find_raw(dir_desk, fuel, oxid, phi, atm, T0, reactor, n_digit):
             zerork_premix(dir_desk, atm, T0, fuel['composition'], oxid['composition'], phi,
                    soln.species_names, soln.reaction_equations(), dir_raw=dir_raw)
 
+    os.chdir(cwd)
 
 """ ------------------------------------------------------
       dP                     oo          
@@ -210,7 +215,7 @@ def find_raw(dir_desk, fuel, oxid, phi, atm, T0, reactor, n_digit):
 """
 
 
-def run_train(parent, progress=None):
+def run_train(parent, progress_signal=None):
     dir_de = os.path.join(parent.project['dir_public'],'detailed')
 
     list_train = []
@@ -220,8 +225,8 @@ def run_train(parent, progress=None):
 
     list_train = sorted(list_train)
 
-    v = 0
-    raw_single_mech(list_train, parent, 100, v, dir_de)
+    raw_single_mech(list_train, parent, dir_de, mode='train',
+                    progress_signal=progress_signal)
     return True
 
 
@@ -237,14 +242,18 @@ def do_run(inputs):
     path_raw = os.path.join(dir_raw,'raw.npz')
 
     if not os.path.exists(path_raw) and not check_only:
-        find_raw(dir_desk, fuel, oxid, phi, atm, T0, reactor, n_digit)
+        find_raw(dir_desk, fuel, oxid, phi, atm, T0, reactor, n_digit) 
 
-    return path_raw
+    if os.path.exists(path_raw):
+        return path_raw
+    else:
+        return ""
 
 
-def raw_single_mech(list_db, parent, dv_mech, v, dir_desk, bar='train',
+def raw_single_mech(list_db, parent, dir_desk, mode='train', progress_signal=None,
                     reactor_modifier = "", check_only=False):
 
+    inputs_array = []
     for db_name in list_db:
 
         database = parent.project['database'][db_name]
@@ -255,7 +264,6 @@ def raw_single_mech(list_db, parent, dv_mech, v, dir_desk, bar='train',
         oxid_list = database['oxid']
         reactor = database['reactor'] + reactor_modifier
 
-        inputs_array = []
         for fuel_name in fuel_list:
             fuel = parent.project['fuel'][fuel_name]
             for oxid_name in oxid_list:
@@ -267,10 +275,15 @@ def raw_single_mech(list_db, parent, dv_mech, v, dir_desk, bar='train',
                             oxid, phi, atm, T0, dir_desk, reactor,
                             parent.n_digit, check_only])
 
-        with PoolWrapper() as p:
-            raws = list(tqdm(p.imap_unordered(do_run, inputs_array), total=len(inputs_array), desc=f"{db_name}({reactor})"))
+    raw_paths = []
+    with PoolWrapper() as p:
+        iterator = tqdm(p.imap_unordered(do_run, inputs_array), file=parent.progress_stream, total=len(inputs_array), desc=f"{mode}")
+        for idx, result in enumerate(iterator):
+            raw_paths.append(result)
+            if(progress_signal):
+                progress_signal.emit(int((idx+1)/len(inputs_array)*100))
 
-    return raws
+    return raw_paths
 
 
 """ ------------------------------------------------------
@@ -316,7 +329,7 @@ def do_GPS_run(inputs):
     return collected_results
 
 
-def run_GPS(parent, progress=None):
+def run_GPS(parent, progress_signal=None):
     min_dT = parent.min_dT
 
     dir_public = parent.project['dir_public']
@@ -366,6 +379,22 @@ def run_GPS(parent, progress=None):
             iso_name = None
             iso = None
             gamma_list = [None]
+
+        #Check to see if we are already done
+        all_done = True
+        for K in K_list:
+            for beta in beta_list:
+                for alpha in alpha_list:
+                    for gamma in gamma_list:
+                        dir_sk = para2dir_GPS(dir_public, train_name, \
+                            alpha=alpha, K=K, beta=beta, \
+                            es_name=es_name, iso_name=iso_name, \
+                            d=parent.n_digit, gamma=gamma)
+                        path_yaml = os.path.join(dir_sk,"mech","chem.yaml")
+                        if(not os.path.exists(path_yaml)):
+                            all_done = False
+        if(all_done):
+            continue
 
         inputs_array = []
 
@@ -465,8 +494,16 @@ def run_GPS(parent, progress=None):
                                                     beta_list, iso, gamma_list,
                                                     fuel_name, oxid_name, dir_de])
 
+#        with PoolWrapper() as p:
+#            results = list(tqdm(p.imap(do_GPS_run, inputs_array),total=len(inputs_array), desc="GPS"))
+        results = []
         with PoolWrapper() as p:
-            results = list(tqdm(p.imap(do_GPS_run, inputs_array),total=len(inputs_array), desc="GPS"))
+            iterator = tqdm(p.imap(do_GPS_run, inputs_array), file=parent.progress_stream, total=len(inputs_array), desc=f"{GPS}")
+            for idx, result in enumerate(iterator):
+                results.append(result)
+                if(progress_signal):
+                    #parent.progress.set_value('GPS', int((idx+1)/len(inputs_array)*100))
+                    progress_signal.emit(int((idx+1)/len(inputs_array)*100))
 
         species_sets = defaultdict(set)
         for i, o in zip(inputs_array, results):
@@ -519,10 +556,14 @@ def run_GPS(parent, progress=None):
                         # generate chem.inp ***************
                         write_sk_inp(species_kept, dir_mech_de, dir_mech_sk, notes)
 
+    if(progress_signal):
+        #parent.progress.set_value('GPS', 100)
+        progress_signal.emit(100)
+
     return True
 
 
-def run_sens(parent, progress=None, check_only=False):
+def run_sens(parent, progress_signal=None, check_only=False):
 
     sens_out = {}
     for sens_name in parent.project['sens'].keys():
@@ -533,26 +574,33 @@ def run_sens(parent, progress=None, check_only=False):
                 dir_desk = parent.project['mech'][mech_name]['desk']
             else:
                 assert(mech_name[0:3] == "GPS")
-                gps_mechs = get_GPS_mechs(parent.project)
+                gps_mechs = get_GPS_mechs(parent)
                 dir_desk = gps_mechs[mech_name]
             list_dbs = parent.project['sens'][sens_name]['databases']
-            v = 0
-            raws = raw_single_mech(list_dbs, parent, 100, v, dir_desk,
+            raw_paths = raw_single_mech(list_dbs, parent, dir_desk,
+                            mode='sens', progress_signal=progress_signal,
                             reactor_modifier='+sensitivity',
                             check_only=check_only)
-            sens_out[sens_name] = {'mech_name': mech_name}
-            sens_out[sens_name]['srels'] = None
-            #Note: Each sensitivity job will be sorted based on srel, but we need to merge them.
-            #Here we will store maximum sensitivity over all conditions to sort later
-            for path_raw in raws:
-                sens_data = np.load(path_raw)
-                idxs, srels, eqs = sens_data['indexes'], sens_data['srel'], sens_data['equations']
-                if(not sens_out[sens_name]['srels']):
-                    sens_out[sens_name]['srels'] = np.zeros_like(srels)
-                    sens_out[sens_name]['eqs'] = ['']*len(eqs)
-                for idx, srel, eq in zip(idxs, srels, eqs):
-                    sens_out[sens_name]['srels'][idx-1] = max(srel,sens_out[sens_name]['srels'][idx-1])
-                    sens_out[sens_name]['eqs'][idx-1] = eq
+            if(any(raw_paths)):
+                path_yaml = os.path.join(dir_desk,'mech','chem.yaml')
+                soln = get_lwsoln(path_yaml)
+
+                sens_out[sens_name] = {'mech_name': mech_name}
+                sens_out[sens_name]['srels'] = None
+                #Note: Each sensitivity job will be sorted based on srel, but we need to merge them.
+                #Here we will store maximum sensitivity over all conditions to sort later
+                for path_raw in raw_paths:
+                    if(not path_raw): continue
+                    sens_data = np.load(path_raw)
+                    idxs, srels, eqs, mws = sens_data['indexes'], sens_data['srel'], sens_data['equations'], soln.reaction_mw
+                    if(not sens_out[sens_name]['srels']):
+                        sens_out[sens_name]['srels'] = np.zeros_like(srels)
+                        sens_out[sens_name]['mws'] = np.zeros_like(mws)
+                        sens_out[sens_name]['eqs'] = ['']*len(eqs)
+                    for idx, srel, eq in zip(idxs, srels, eqs):
+                        sens_out[sens_name]['srels'][idx] = max(abs(srel),sens_out[sens_name]['srels'][idx])
+                        sens_out[sens_name]['eqs'][idx] = eq
+                        sens_out[sens_name]['mws'][idx] = mws[idx]
 
     return sens_out
 
@@ -566,10 +614,26 @@ def run_sens(parent, progress=None, check_only=False):
           dP   `88888P' `88888P'   dP   
 """
 
+def plot_db(parent, db_name, mech_dirs):
+    database = parent.project['database'][db_name]
+    reactor = database['reactor']
+    if("autoign" in reactor):
+        #auto_ign_plots(db_name, mech_dirs)
+        print("autoign plot")
+    elif("PSR" in reactor):
+        print("PSR plot")
+        #psr_ext_plots(db_name, mech_dirs)
+    else:
+        assert("Premix" in reactor)
+        print("Premix plot")
+        #premix_plots(db_name, mech_dirs)
 
-def run_test(parent, progress=None):
+
+def run_test(parent, progress_signal=None):
 
     dir_public = parent.project['dir_public']
+
+    mech_dirs = []
 
     list_test = []
     for db_name in parent.project['database'].keys():
@@ -586,8 +650,10 @@ def run_test(parent, progress=None):
                                                           
     dir_de = os.path.join(dir_public,'detailed')
 
-    v = 0
-    raw_single_mech(list_test, parent, 100, v, dir_de, 'test')
+    raw_single_mech(list_test, parent, dir_de, mode='test',
+                    progress_signal=progress_signal)
+
+    mech_dirs.append(dir_de)
 
     #  ============================
     #     .88888.   888888ba  .d88888b  
@@ -602,11 +668,8 @@ def run_test(parent, progress=None):
         if parent.project['GPS'][GPS_name]['checked']:
             list_GPS.append(GPS_name)
 
-    v = 0
 
     if bool(list_GPS):
-
-        dv_GPS = 100.0/len(list_GPS)
 
         for GPS_name in list_GPS:
 
@@ -623,21 +686,19 @@ def run_test(parent, progress=None):
                 gamma_list = [None]
 
 
-            dv_kab = 1.0 * dv_GPS/ (len(K_list) * len(beta_list) * len(alpha_list) * len(gamma_list))
-
             for K in K_list:
                 for beta in beta_list:
                     for alpha in alpha_list:
                         for gamma in gamma_list:
 
-                            dir_sk = para2dir_GPS(dir_public, train_name, \
+                            dir_sk = para2dir_GPS(dir_public, parent.train_name, \
                                     alpha=alpha, K=K, beta=beta, \
                                     es_name=es_name, iso_name=iso_name, \
                                     d=parent.n_digit, gamma=gamma)
 
-                            path_yaml = os.path.join(dir_sk,'mech','chem.yaml')
-
-                            v = raw_single_mech(list_test, parent, dv_kab, v, dir_sk, 'train')
+                            raw_single_mech(list_test, parent, dir_sk, mode='test',
+                                            progress_signal=progress_signal)
+                            mech_dirs.append(dir_sk)
 
     #  ============================
     #               dP   dP                         
@@ -651,13 +712,14 @@ def run_test(parent, progress=None):
         sk = parent.project['mech'][name]
         if name != 'detailed' and sk['checked']:
             dir_sk = sk['desk']
-            path_yaml = os.path.join(dir_sk,'mech','chem.yaml')
-            if name not in parent.soln.keys():
-                parent.soln[name] = ct.Solution(path_yaml)
-                parent.soln_in[name] = ct.Solution(path_yaml)
 
-            v = 0
-            raw_single_mech(list_test, parent, 100, v, dir_sk, 'test')
+            raw_single_mech(list_test, parent, dir_sk, mode='test',
+                            progress_signal=progress_signal)
+            mech_dirs.append(dir_sk)
+
+
+    for db_name in list_test:
+        plot_db(parent, db_name, mech_dirs)
 
 
 """ --------------------------------------
@@ -669,8 +731,29 @@ def run_test(parent, progress=None):
           dP   `88888P8 dP    dP `88888P'   
     """
                                          
-def tune_single_mech(list_db, parent, dv_mech, v, dir_desk, bar='train'):
+def tune_single_mech(tune_name, list_db, reactions, parent, dir_mech, bar='tune'):
+    mech_file = os.path.join(dir_mech,'mech','chem.inp')
+    therm_file = os.path.join(dir_mech,'mech','therm.dat')
+    trans_file = os.path.join(dir_mech,'mech','trans.dat')
+    if(not os.path.exists(trans_file)):
+        trans_file = None
+    moh = mech_optimizer(mech_file, therm_file, trans_file)
 
+    dir_de = os.path.join(parent.project['dir_public'],'detailed')
+    chem_de = os.path.join(dir_de,'mech','chem.inp')
+    therm_de = os.path.join(dir_de,'mech','therm.dat')
+    trans_de = os.path.join(dir_de,'mech','trans.dat')
+    if(not os.path.exists(trans_de)):
+        trans_de = None
+
+    dir_tune = os.path.join(dir_mech,'tuning',tune_name)
+    if not os.path.exists(dir_tune):
+        os.makedirs(dir_tune)
+
+    cwd = os.getcwd()
+    os.chdir(dir_tune)
+
+    nprocs = 0
     for db_name in list_db:
 
         database = parent.project['database'][db_name]
@@ -681,87 +764,99 @@ def tune_single_mech(list_db, parent, dv_mech, v, dir_desk, bar='train'):
         oxid_list = database['oxid']
         reactor = database['reactor']
 
-        inputs_array = []
         for fuel_name in fuel_list:
-            fuel = parent.project['fuel'][fuel_name]
+            fuel_comp = parent.project['fuel'][fuel_name]['composition']
             for oxid_name in oxid_list:
-                oxid = parent.project['oxid'][oxid_name]
-                for phi in phi_list:
-                    for atm in atm_list:
-                        for T0 in T0_list:
-                            inputs_array.append([fuel_name, fuel, oxid_name,
-                            oxid, phi, atm, T0, dir_desk, reactor,
-                            parent.n_digit])
+                oxid_comp = parent.project['oxid'][oxid_name]['composition']
+                detailed_data_file=os.path.join(dir_tune, f'app_{db_name}_{fuel_name}_{oxid_name}.dat')
+                if("autoign" in reactor or 'PSR' in reactor):
+                    if("autoign" in reactor):
+                        if os.path.isfile(detailed_data_file):
+                        #TODO: Procs
+                            app = cv_opt(comparison_file=detailed_data_file,procs=1)
+                        else:
+                            app = cv_opt(full_mechanism=chem_de,
+                                         full_therm=therm_de,
+                                         save_full=detailed_data_file,
+                                         procs=1)
 
-        with PoolWrapper() as p:
-            _ = list(tqdm(p.imap_unordered(do_run, inputs_array), total=len(inputs_array), desc=f"{db_name}({reactor})"))
+                    if("PSR" in reactor):
+                        if os.path.isfile(detailed_data_file):
+                            app = psr_opt(comparison_file=detailed_data_file,procs=1)
+                        else:
+                            app = psr_opt(full_mechanism=chem_de,
+                                          full_therm=therm_de,
+                                          save_full=detailed_data_file,
+                                          procs=1)
+                        #TODO: Set from extinction curve if available?
+                        app.set('residence_times', [1.0e-4, 1.0e-2, 1.0])
 
-    return v
+                    app.set('fuel_mole_fracs', fuel_comp)
+                    app.set('oxidizer_mole_fracs', oxid_comp)
+                    app.set('initial_temperatures',  T0_list)
+                    app.set('initial_pressures',  [ 101325*p for p in atm_list ])
+                    app.set('initial_phis',  phi_list)
+                    moh.add_opt_app(app)
+                    nprocs+=1
 
 
-def run_tune(parent):
+                if("Premix" in reactor):
+                    for phi in phi_list:
+                        detailed_data_file=os.path.join(dir_tune, f'app_{db_name}_{fuel_name}_{oxid_name}_phi{phi}.dat')
+                        if os.path.isfile(detailed_data_file):
+                            app = premix_opt(comparison_file=detailed_data_file,procs=1)
+                        else:
+                            app = premix_opt(full_mechanism=chem_de,
+                                          full_therm=therm_de,
+                                          full_trans=trans_de,
+                                          save_full=detailed_data_file,
+                                          procs=1)
+                        app.set('inlet_fuel_comp', fuel_comp)
+                        app.set('inlet_oxidizer_comp', oxid_comp)
+                        app.set('initial_comp', oxid_comp)
+                        app.set('temperatures',  T0_list)
+                        app.set('pressures',  [101325*p for p in atm_list] )
+                        app.set('phis',  [phi])
+
+                        moh.add_opt_app(app)
+                        nprocs+=1
+
+    moh.nprocs = nprocs
+
+    for rxn in reactions:
+        moh.set_rxn_opt(rxn, 2, 100) #Optional A multiplier and Ea delta
+
+    parent.progress_stream.write(f"Running tune {tune_name} in: {dir_tune}")
+    with contextlib.redirect_stdout(parent.progress_stream), contextlib.redirect_stderr(parent.progress_stream):
+        moh.optimize(check_interval=10, method='basinhopping',
+                     output_directory=dir_tune)
+
+    os.chdir(cwd)
+
+    return
+
+def run_tune(parent, progress_signal=None):
 
     list_tune = []
-    for db_name in parent.project['database'].keys():
-        if parent.project['database'][db_name]['tune']:
-            list_tune.append(db_name)
+    for tune_name in parent.project['tune'].keys():
+        if parent.project['tune'][tune_name]['checked']:
+            list_tune.append(tune_name)
 
-    #  ============================
-    #     .88888.   888888ba  .d88888b  
-    #    d8'   `88  88    `8b 88.    "' 
-    #    88        a88aaaa8P' `Y88888b. 
-    #    88   YP88  88              `8b 
-    #    Y8.   .88  88        d8'   .8P 
-    #     `88888'   dP         Y88888P  
-                                       
-    list_GPS = []
-    for GPS_name in parent.project['GPS'].keys():
-        if parent.project['GPS'][GPS_name]['checked']:
-            list_GPS.append(GPS_name)
+    if bool(list_tune) == False:
+        return False
 
-    v = 0
-
-    if bool(list_GPS):
-
-        dv_GPS = 100.0/len(list_GPS)
-
-        for GPS_name in list_GPS:
-
-            GPS = parent.project['GPS'][GPS_name]
-            alpha_list = GPS['alpha']
-            beta_list = GPS['beta']
-            K_list = GPS['K']
-            es_name = GPS['es']
-            if GPS['iso_enable']:
-                iso_name = GPS['iso']
-                gamma_list = GPS['gamma']
-            else:
-                iso_name = None
-                gamma_list = [None]
-
-
-            dv_kab = 1.0 * dv_GPS/ (len(K_list) * len(beta_list) * len(alpha_list) * len(gamma_list))
-
-            for K in K_list:
-                for beta in beta_list:
-                    for alpha in alpha_list:
-                        for gamma in gamma_list:
-
-                            dir_sk = para2dir_GPS(dir_public, train_name, \
-                                    alpha=alpha, K=K, beta=beta, \
-                                    es_name=es_name, iso_name=iso_name, \
-                                    d=parent.n_digit, gamma=gamma)
-
-                            path_yaml = os.path.join(dir_sk,'mech','chem.yaml')
-
-                            reactions = None
-
-                            tune_single_mech(list_test, parent, dv_kab, v, dir_sk, reactions, 'train')
-
-
-
-
-
+    for tune_name in list_tune:
+        tune = parent.project['tune'][tune_name]
+        mech_name = tune['mech_name']
+        databases = tune['databases']
+        reactions = tune['reactions']
+        if mech_name in parent.project['mech']:
+            dir_mech = parent.project['mech'][mech_name]['desk']
+        else:
+            assert(mech_name[0:3] == "GPS")
+            gps_mechs = get_GPS_mechs(parent)
+            dir_mech = gps_mechs[mech_name]
+        tune_single_mech(tune_name, databases, reactions, parent, dir_mech, 'tune')
 
 
 

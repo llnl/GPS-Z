@@ -99,6 +99,7 @@ class dialog_sensitivity(common):
         self.w.setFixedSize(self.w.width(), self.w.height())    
         self.w.btn_save.clicked.connect(self.act_save)
         self.w.btn_cancel.clicked.connect(self.act_cancel)
+        self.w.cb_mech.currentTextChanged.connect(self.read_mechanism)
 
         # set initial values =============================
         self.mech_names = ['detailed'] + parent.get_mech_names()

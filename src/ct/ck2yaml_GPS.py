@@ -8,19 +8,21 @@ def ck2yaml(folder):
 
     input_file = os.path.join(folder,'chem.inp')
     thermo_file = os.path.join(folder,'therm.dat')
-    transport_file = None
+    transport_file  = os.path.join(folder,'trans.dat')
 
-    try:
-        open(os.path.join(folder,'tran.dat'))
-        transport_file  = os.path.join(folder,'tran.dat')
-    except IOError:
-        pass
+    if(not os.path.exists(transport_file)):
+        transport_file = None
 
     out_name = os.path.join(folder,"chem.yaml")
 
-    cantera.ck2yaml.convert(input_file, thermo_file=thermo_file,
-                            transport_file=transport_file,
-                            out_name=out_name, permissive=True)
+    try:
+        cantera.ck2yaml.convert(input_file, thermo_file=thermo_file,
+                                transport_file=transport_file,
+                                out_name=out_name, permissive=True)
+    except Exception as e:
+        print("Converting to chemkin format to cantera yaml failed:")
+        print(e)
+        ok = False
 
     return ok
 

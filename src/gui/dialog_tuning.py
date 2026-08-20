@@ -21,26 +21,36 @@ class dialog_tuning(common):
 
     def make_string(self, data):
         reactions = list(data['reactions'].keys())
-
         reactions.sort()
-        txt = '_'.join(reactions)
-        return txt
+
+
+        mech_name = data['mech_name']
+        db_str = '_'.join([d for d in data['databases']])
+        rxn_str = '_'.join(reactions)
+        txt = f"{mech_name}_{db_str}_{rxn_str}"
+        return  txt
 
     # display ============================
     def set_table_rxns(self):
         model = QStandardItemModel()
         n_row = 0
 
-        for rxn in self.data['reactions'].keys():
-            Qitem_rxn = QStandardItem(rxn)
-            Qitem_rxn.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+        rxns = list(self.data['reactions'].keys())
+        for rxn in rxns:
+            if(rxn in self.rxn_list):
+                Qitem_rxn = QStandardItem(rxn)
+                Qitem_rxn.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
 
-            model.setItem(n_row,0, Qitem_rxn)
-            n_row += 1
+                model.setItem(n_row,0, Qitem_rxn)
+                n_row += 1
+            else:
+                del self.data['reactions'][rxn]
 
         self.w.table_rxn.setModel(model)
         for i_row in range(n_row):
             self.w.table_rxn.setRowHeight(i_row,20)
+
+        self.w.table_rxn.setColumnWidth(0, 400)
 
 
     # get ============================
@@ -56,9 +66,9 @@ class dialog_tuning(common):
         self.set_table_rxns()
         return True
 
-    def read_sensitivity(self, save=False):
+    def read_sensitivity(self):
         sens_name = str(self.w.cb_sens.currentText())
-        self.set_sens_rxn_list()
+        self.set_sens_rxns_list()
         return True
 
     def read_databases(self):
@@ -86,7 +96,7 @@ class dialog_tuning(common):
 
     # set ============================
     def set_rxn_list(self):
-        mech_name = self.data['mech_name']
+        mech_name = str(self.w.cb_mech.currentText())
         self.rxn_list = []
         if(mech_name in self.mech_names):
             self.rxn_list = self.parent.get_soln(mech_name).reaction_equations()
@@ -99,27 +109,38 @@ class dialog_tuning(common):
     def set_sensitivity(self):
         self.w.cb_sens.blockSignals(True)
         self.w.cb_sens.clear()
-        self.w.cb_sens.addItems([k for k in self.sensitivities])
+        self.w.cb_sens.addItems(self.sensitivities)
         self.w.cb_sens.blockSignals(False)
 
     def set_sens_rxns_list(self):
-        sens = self.sensitivities[str(self.w.cb_sens.currentText())]
+        sens_name = str(self.w.cb_sens.currentText())
+        if(not sens_name):
+            return
+        sens = self.sensitivities[sens_name]
         sorted_idxs = np.argsort(-1*np.abs(sens['srels']))
         num_sens_reactions = self.w.spin_sens_numrxn.value()
+        exclude_small = self.w.ck_exsm.isChecked()
 
         model = QStandardItemModel()
         n_row = 0
-        for idx in sorted_idxs[0:num_sens_reactions]:
-            rxn = sens['eqs'][idx]
-            Qitem_rxn = QStandardItem(rxn)
-            Qitem_rxn.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+        idx = 0
+        while n_row < num_sens_reactions and idx < len(sorted_idxs):
+            sorted_idx = sorted_idxs[idx]
+            mw = sens['mws'][sorted_idx]
+            if(not exclude_small or mw > 80):
+                rxn = sens['eqs'][sorted_idx]
+                Qitem_rxn = QStandardItem(rxn)
+                Qitem_rxn.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
 
-            model.setItem(n_row,0, Qitem_rxn)
-            n_row += 1
+                model.setItem(n_row,0, Qitem_rxn)
+                n_row += 1
+            idx += 1
 
         self.w.table_rxn_sens.setModel(model)
         for i_row in range(n_row):
             self.w.table_rxn_sens.setRowHeight(i_row,20)
+
+        self.w.table_rxn_sens.setColumnWidth(0, 400)
 
     # acts ============================
 
@@ -144,18 +165,13 @@ class dialog_tuning(common):
         if rxn in self.rxn_list:
             self.data['reactions'][rxn] = True
             self.set_table_rxns()
-        else:
-            print(rxn)
-            print(self.rxn_list)
-
 
     def act_add_sens_rxns(self):
-        sens = self.sensitivities[str(self.w.cb_sens.currentText())]
-        sorted_idxs = np.argsort(-1*np.abs(sens['srels']))
-        num_sens_reactions = self.w.spin_sens_numrxn.value()
+        model = self.w.table_rxn_sens.model()
 
-        for idx in sorted_idxs[0:num_sens_reactions]:
-            rxn = sens['eqs'][idx]
+        for row in range(model.rowCount()):
+            idx = model.index(row,0)
+            rxn = model.data(idx)
             self.act_add_rxn(rxn=rxn)
 
 
@@ -195,26 +211,26 @@ class dialog_tuning(common):
 
         self.w = uic.loadUi(os.path.join(self.parent.dir_ui, ui_name))    
         self.w.setFixedSize(self.w.width(), self.w.height())    
-        self.w.btn_add_rxn.clicked.connect(self.act_add_rxn)
-        self.w.btn_del_rxn.clicked.connect(self.act_del_rxn)
-        self.w.table_rxn.clicked.connect(self.act_cell)
-        self.w.btn_save.clicked.connect(self.act_save)
-        self.w.btn_cancel.clicked.connect(self.act_cancel)
-        self.w.cb_mech.currentTextChanged.connect(self.read_mechanism)
-        self.w.cb_sens.currentTextChanged.connect(self.read_sensitivity)
-        self.w.btn_add_sens_rxns.clicked.connect(self.act_add_sens_rxns)
-        self.w.spin_sens_numrxn.valueChanged.connect(self.set_sens_rxns_list)
-
 
         # set initial values =============================
         self.mech_names = parent.get_mech_names()
-        self.sensitivities = run_sens(parent, progress=None, check_only=True)
+        old_stream = None
+        try:
+            old_stream = parent.progress_stream
+        except:
+            pass
+        parent.progress_stream = open(os.devnull,'w')
+
+        self.sensitivities = run_sens(parent, progress_signal=None, check_only=True)
+
+        parent.progress_stream.close()
+        if(old_stream):
+            parent.progress_stream = old_stream
 
         if data_name is None:
             self.data = dict()
-            self.data['name'] = self.new_name('reactions', self.occupied)
+            self.data['name'] = self.new_name('tune', self.occupied)
             self.data['mech_name'] = ''
-            self.data['sensitivity_name'] = ''
             self.data['databases'] = []
             self.data['reactions'] = dict()
             self.data['checked'] = True
@@ -224,10 +240,10 @@ class dialog_tuning(common):
 
         for m in self.mech_names:
             self.w.cb_mech.addItem(m)
+         
         idx = self.w.cb_mech.findText(self.data['mech_name'])
         if( idx != -1 ):
             self.w.cb_mech.setCurrentIndex(idx)
-
 
         model = QStandardItemModel()
         for db in parent.project['database'].keys():
@@ -243,19 +259,27 @@ class dialog_tuning(common):
             model.appendRow(Qitem)
         self.w.list_dbs.setModel(model)
 
-
         self.set_rxn_list()
         self.set_table_rxns()
         self.set_sensitivity()
 
-        self.w.table_rxn.setColumnWidth(0, 290)
         self.w.txt_name.setText(self.data['name'])
 
-        self.w.table_rxn_sens.setColumnWidth(0, 290)
         self.w.spin_sens_numrxn.setRange(0, 40)
         self.w.spin_sens_numrxn.setValue(0)
 
         #self.act_deft_cust()
+        self.w.btn_add_rxn.clicked.connect(self.act_add_rxn)
+        self.w.btn_del_rxn.clicked.connect(self.act_del_rxn)
+        self.w.table_rxn.clicked.connect(self.act_cell)
+        self.w.btn_save.clicked.connect(self.act_save)
+        self.w.btn_cancel.clicked.connect(self.act_cancel)
+        self.w.cb_mech.currentTextChanged.connect(self.read_mechanism)
+        self.w.cb_sens.currentTextChanged.connect(self.read_sensitivity)
+        self.w.btn_add_sens_rxns.clicked.connect(self.act_add_sens_rxns)
+        self.w.spin_sens_numrxn.valueChanged.connect(self.set_sens_rxns_list)
+        self.w.ck_exsm.clicked.connect(self.set_sens_rxns_list)
+
 
         # exec and return =============================
 
