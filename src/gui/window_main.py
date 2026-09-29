@@ -709,7 +709,7 @@ class window_main(common):
             self.dir_parent = gps_home
         else:
             self.dir_parent = self.cwd
-        self.dir_ui = os.path.join(self.dir_parent,'ui')
+        self.dir_ui = os.path.join(self.dir_parent,'src','ui')
 
         self.soln = dict()
         self.soln_in = dict()
