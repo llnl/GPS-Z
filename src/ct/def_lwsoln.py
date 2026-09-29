@@ -21,6 +21,7 @@ class lwsoln(object):
 
         self.species_names = heavy_soln.species_names
         self.species_dict = {}
+        self.n_species = heavy_soln.n_species
         for i in range(heavy_soln.n_species):
             n = heavy_soln.species(i).name
             c = heavy_soln.species(i).composition
@@ -50,10 +51,10 @@ class lwsoln(object):
 @cache
 def get_lwsoln(yaml_path):
     pfilename = yaml_path+'.p'
-    if(os.path.exists(pfilename)):
+    try:
         with open(pfilename,'rb') as pfile:
             lws = pickle.load(pfile)
-    else:
+    except:
         soln = ct.Solution(yaml_path)
         lws = lwsoln(soln)
         with open(pfilename,'wb') as pfile:

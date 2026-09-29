@@ -134,7 +134,7 @@ class window_main(common):
         OK_dir = (self.project['dir_public'] != None)
         self.w.menu_save.setEnabled(OK_dir)
         #self.w.menu_comb_sk.setEnabled(OK_dir)
-        self.w.menu_post.setEnabled(OK_dir)
+        self.w.menu_postprocessor.setDisabled(True)
         self.w.gb_sk.setEnabled(OK_dir)
         self.w.btn_set_de.setEnabled(OK_dir)
         #self.w.gb_PFA.setEnabled(OK_dir)
@@ -304,7 +304,7 @@ class window_main(common):
 
         gps_mechs = get_GPS_mechs(self)
         if(mech_name in gps_mechs):
-            dir_gps = gps_mechs[mech_name]
+            dir_gps = gps_mechs[mech_name]['dir']
             path_yaml = os.path.join(dir_gps,'mech','chem.yaml')
             return get_lwsoln(path_yaml)
 

@@ -234,6 +234,8 @@ class dialog_mech(common):
                 f.write(str(n_sp))
                 f.close()
 
+                self.data['ns'] = n_sp
+
                 self.act_ns()
 
                 self.w.btn_save.setEnabled(True)
@@ -330,6 +332,7 @@ class dialog_mech(common):
             self.data['chem'] = ''
             self.data['therm'] = ''
             self.data['trans'] = ''
+            self.data['ns'] = ''
             self.data['name'] = self.new_name('skeletal', self.occupied)
             self.data['checked'] = True
             self.soln = None

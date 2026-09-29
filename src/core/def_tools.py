@@ -1,8 +1,9 @@
 import os
 
 import numpy as np
-import matplotlib.pylab as plt
 import cantera as ct
+
+from src.ct.def_lwsoln import get_lwsoln
 
 __author__ = 'Xiang Gao'
 
@@ -17,7 +18,7 @@ def find_ns(dir_sk):
         f = open(path_save,'r')
         ns = int(f.read())
     except IOError:
-        soln = ct.Solution(os.path.join(dir_sk,'mech','chem.cti'))
+        soln = get_lwsoln(os.path.join(dir_sk,'mech','chem.yaml'))
         ns = soln.n_species
         f = open(path_save,'w')
         f.write(str(ns))
@@ -102,7 +103,7 @@ def para2dir_GPS(dir_public, train_name, \
     return os.path.join(dir_public, 'GPS', train_name, para_str, extra_setting)
 
 
-def get_GPS_mechs(parent):
+def get_GPS_mechs(parent, with_duplicates=False):
     dir_public = parent.project['dir_public']
     train_name = parent.train_name
     GPS_mechs = {}
@@ -136,6 +137,12 @@ def get_GPS_mechs(parent):
             iso = None
             gamma_list = [None]
 
+        if(len(K_list)>1 or len(beta_list)>1 or len(gamma_list)>1):
+            #Over-ride to avoid eliminating different mechs with the
+            #same number of species
+            with_duplicates=True
+
+        ns_last=-1
         for K in K_list:
             for beta in beta_list:
                 for alpha in alpha_list:
@@ -150,8 +157,50 @@ def get_GPS_mechs(parent):
 
                         if os.path.exists(path_yaml_sk):
                             mech_name = f'{GPS_name}_K{K}_b{beta}_a{alpha}'
-                            GPS_mechs[mech_name] = dir_sk
+                            #simplify names for default settings
+                            mech_name = mech_name.replace("_K1.0_b0.5_","_")
+                            ns = find_ns(dir_sk)
+                            if(with_duplicates or ns != ns_last):
+                                GPS_mechs[mech_name] = {'dir': dir_sk, 'base_name':
+                                                        GPS_name, 'ns': ns }
+                            ns_last = ns
     return GPS_mechs
+
+def get_tune_mechs(parent):
+    tune_mechs = {}
+    list_tune = []
+    for tune_name in parent.project['tune'].keys():
+        if parent.project['tune'][tune_name]['checked']:
+            list_tune.append(tune_name)
+
+    if bool(list_tune) == False:
+        return tune_mechs
+
+    for tune_name in list_tune:
+        tune = parent.project['tune'][tune_name]
+        mech_name_orig = tune['mech_name']
+        mech_name_tune = mech_name_orig + '_tuned'
+        databases = tune['databases']
+        reactions = tune['reactions']
+        if mech_name_orig in parent.project['mech']:
+            dir_mech = parent.project['mech'][mech_name_orig]['desk']
+            base_name = mech_name_tune
+        else:
+            assert(mech_name_orig[0:3] == "GPS")
+            gps_mechs = get_GPS_mechs(parent)
+            dir_mech = gps_mechs[mech_name_orig]['dir']
+            base_name = gps_mechs[mech_name_orig]['base_name']+'_tuned'
+
+        tune_dir = os.path.join(dir_mech,'tuning',tune_name)
+        path_yaml = os.path.join(tune_dir,'mech','chem.yaml')
+        if os.path.exists(path_yaml):
+            ns = find_ns(tune_dir)
+            tune_mechs[mech_name_tune] = {'dir': tune_dir,
+                                          'base_name': base_name,
+                                          'ns': ns}
+
+    return tune_mechs
+
 
 def para2dir_PFA(dir_public, train_name, crit, d=4):
     return os.path.join(dir_public, 'PFA', train_name, num2str(crit,d))

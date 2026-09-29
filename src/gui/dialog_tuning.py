@@ -12,7 +12,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
 from .def_dialog import common
-from src.core.def_tools import keys_sorted, num2str, get_GPS_mechs
+from src.core.def_tools import keys_sorted, num2str
 from .def_run_pool import run_sens
 
 class dialog_tuning(common):

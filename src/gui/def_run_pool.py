@@ -25,6 +25,8 @@ from src.ct.def_lwsoln import get_lwsoln
 from src.core.def_GPS import GPS_algo
 from src.core.def_build_graph import build_flux_graph
 
+from src.post.def_plots import auto_ign_plots, psr_ext_plots, premix_plots, cumulative_error_plot
+
 from zerork.rate_opt import mech_optimizer, cv_opt, psr_opt, premix_opt
 
 """ >>>>>>>>>>>>>------------------------------------------------
@@ -251,7 +253,9 @@ def do_run(inputs):
 
 
 def raw_single_mech(list_db, parent, dir_desk, mode='train', progress_signal=None,
-                    reactor_modifier = "", check_only=False):
+                    progress_mult=1.0, progress_start=0,
+                    reactor_modifier = "", check_only=False,
+                    pool=None):
 
     inputs_array = []
     for db_name in list_db:
@@ -276,12 +280,13 @@ def raw_single_mech(list_db, parent, dir_desk, mode='train', progress_signal=Non
                             parent.n_digit, check_only])
 
     raw_paths = []
-    with PoolWrapper() as p:
+    pool_context = PoolWrapper() if pool is None else contextlib.nullcontext(pool)
+    with pool_context as p:
         iterator = tqdm(p.imap_unordered(do_run, inputs_array), file=parent.progress_stream, total=len(inputs_array), desc=f"{mode}")
         for idx, result in enumerate(iterator):
             raw_paths.append(result)
             if(progress_signal):
-                progress_signal.emit(int((idx+1)/len(inputs_array)*100))
+                progress_signal.emit(int((idx+1)/len(inputs_array)*100*progress_mult+progress_start))
 
     return raw_paths
 
@@ -575,7 +580,7 @@ def run_sens(parent, progress_signal=None, check_only=False):
             else:
                 assert(mech_name[0:3] == "GPS")
                 gps_mechs = get_GPS_mechs(parent)
-                dir_desk = gps_mechs[mech_name]
+                dir_desk = gps_mechs[mech_name]['dir']
             list_dbs = parent.project['sens'][sens_name]['databases']
             raw_paths = raw_single_mech(list_dbs, parent, dir_desk,
                             mode='sens', progress_signal=progress_signal,
@@ -593,7 +598,7 @@ def run_sens(parent, progress_signal=None, check_only=False):
                     if(not path_raw): continue
                     sens_data = np.load(path_raw)
                     idxs, srels, eqs, mws = sens_data['indexes'], sens_data['srel'], sens_data['equations'], soln.reaction_mw
-                    if(not sens_out[sens_name]['srels']):
+                    if(sens_out[sens_name]['srels'] is None):
                         sens_out[sens_name]['srels'] = np.zeros_like(srels)
                         sens_out[sens_name]['mws'] = np.zeros_like(mws)
                         sens_out[sens_name]['eqs'] = ['']*len(eqs)
@@ -614,32 +619,50 @@ def run_sens(parent, progress_signal=None, check_only=False):
           dP   `88888P' `88888P'   dP   
 """
 
-def plot_db(parent, db_name, mech_dirs):
+def plot_db(parent, db_name, test_mechs):
     database = parent.project['database'][db_name]
     reactor = database['reactor']
     if("autoign" in reactor):
-        #auto_ign_plots(db_name, mech_dirs)
-        print("autoign plot")
+        error_data = auto_ign_plots(parent, db_name, test_mechs)
+
     elif("PSR" in reactor):
-        print("PSR plot")
-        #psr_ext_plots(db_name, mech_dirs)
+        error_data = psr_ext_plots(parent, db_name, test_mechs)
     else:
         assert("Premix" in reactor)
-        print("Premix plot")
-        #premix_plots(db_name, mech_dirs)
+        error_data = premix_plots(parent, db_name, test_mechs)
+
+    return error_data
 
 
 def run_test(parent, progress_signal=None):
 
     dir_public = parent.project['dir_public']
 
-    mech_dirs = []
+    test_mechs = {}
 
     list_test = []
     for db_name in parent.project['database'].keys():
         if parent.project['database'][db_name]['test']:
             list_test.append(db_name)
 
+    #count mechanims
+    num_mechs = 1 # detailed
+
+    gps_mechs = get_GPS_mechs(parent)
+    num_mechs += len(gps_mechs)
+
+    tune_mechs = get_tune_mechs(parent)
+    num_mechs += len(tune_mechs)
+
+    for name in parent.project['mech'].keys():
+        sk = parent.project['mech'][name]
+        if name != 'detailed' and sk['checked']:
+            num_mechs += 1
+
+    progress_mult = 1.0/num_mechs
+    progress_start = 0
+
+    with PoolWrapper() as p:
     #  ============================
     #          dP            dP            oo dP                dP 
     #          88            88               88                88 
@@ -648,12 +671,18 @@ def run_test(parent, progress_signal=None):
     #    88.  .88 88.  ...   88   88.  .88 88 88 88.  ... 88.  .88 
     #    `88888P8 `88888P'   dP   `88888P8 dP dP `88888P' `88888P8 
                                                           
-    dir_de = os.path.join(dir_public,'detailed')
+        dir_de = os.path.join(dir_public,'detailed')
 
-    raw_single_mech(list_test, parent, dir_de, mode='test',
-                    progress_signal=progress_signal)
+        raw_single_mech(list_test, parent, dir_de, mode='test detailed',
+                        progress_signal=progress_signal,
+                        progress_mult=progress_mult,
+                        progress_start=progress_start,
+                        pool=p)
 
-    mech_dirs.append(dir_de)
+        test_mechs['detailed'] = {'dir': dir_de,
+                              'base_name': 'detailed',
+                              'ns': parent.project['mech']['detailed']['ns'],
+                              'error_sum': 0}
 
     #  ============================
     #     .88888.   888888ba  .d88888b  
@@ -663,42 +692,35 @@ def run_test(parent, progress_signal=None):
     #    Y8.   .88  88        d8'   .8P 
     #     `88888'   dP         Y88888P  
                                        
-    list_GPS = []
-    for GPS_name in parent.project['GPS'].keys():
-        if parent.project['GPS'][GPS_name]['checked']:
-            list_GPS.append(GPS_name)
+        for gps_name in gps_mechs:
+            progress_start += 100*progress_mult
+            dir_sk = gps_mechs[gps_name]['dir']
+            raw_single_mech(list_test, parent, dir_sk, mode=f'test {gps_name}',
+                        progress_signal=progress_signal, progress_mult=progress_mult,
+                        progress_start=progress_start, pool=p)
+            test_mechs[gps_name] = {'dir': dir_sk,
+                                    'base_name': gps_mechs[gps_name]['base_name'],
+                                    'ns': gps_mechs[gps_name]['ns'],
+                                    'error_sum': 0, 'ls': '--'}
 
+    #  ============================
+    #       dP                                       
+    #       88                                       
+    #     d8888p bd    bd 88d888b. .d8888b.
+    #       88   88    88 88'  `88 88ooood8
+    #       88   88.  .88 88    88 88.  ...
+    #       dp   `88888p' dp    dp `88888p'
 
-    if bool(list_GPS):
-
-        for GPS_name in list_GPS:
-
-            GPS = parent.project['GPS'][GPS_name]
-            alpha_list = GPS['alpha']
-            beta_list = GPS['beta']
-            K_list = GPS['K']
-            es_name = GPS['es']
-            if GPS['iso_enable']:
-                iso_name = GPS['iso']
-                gamma_list = GPS['gamma']
-            else:
-                iso_name = None
-                gamma_list = [None]
-
-
-            for K in K_list:
-                for beta in beta_list:
-                    for alpha in alpha_list:
-                        for gamma in gamma_list:
-
-                            dir_sk = para2dir_GPS(dir_public, parent.train_name, \
-                                    alpha=alpha, K=K, beta=beta, \
-                                    es_name=es_name, iso_name=iso_name, \
-                                    d=parent.n_digit, gamma=gamma)
-
-                            raw_single_mech(list_test, parent, dir_sk, mode='test',
-                                            progress_signal=progress_signal)
-                            mech_dirs.append(dir_sk)
+        for tune_name in tune_mechs:
+            progress_start += 100*progress_mult
+            dir_sk = tune_mechs[tune_name]['dir']
+            raw_single_mech(list_test, parent, dir_sk, mode=f'test {tune_name}',
+                        progress_signal=progress_signal, progress_mult=progress_mult,
+                        progress_start=progress_start, pool=p)
+            test_mechs[tune_name] = {'dir': dir_sk,
+                                     'base_name': tune_mechs[tune_name]['base_name'],
+                                     'ns': tune_mechs[tune_name]['ns'],
+                                     'error_sum': 0, 'ls': '-.'}
 
     #  ============================
     #               dP   dP                         
@@ -708,18 +730,40 @@ def run_test(parent, progress_signal=None):
     #    88.  .88   88   88    88 88.  ... 88       
     #    `88888P'   dP   dP    dP `88888P' dP       
 
-    for name in parent.project['mech'].keys():
-        sk = parent.project['mech'][name]
-        if name != 'detailed' and sk['checked']:
-            dir_sk = sk['desk']
+        for name in parent.project['mech'].keys():
+            sk = parent.project['mech'][name]
+            if name != 'detailed' and sk['checked']:
+                progress_start += 100*progress_mult
+                dir_sk = sk['desk']
 
-            raw_single_mech(list_test, parent, dir_sk, mode='test',
-                            progress_signal=progress_signal)
-            mech_dirs.append(dir_sk)
+                raw_single_mech(list_test, parent, dir_sk, mode=f'test {name}',
+                        progress_signal=progress_signal, progress_mult=progress_mult,
+                        progress_start=progress_start, pool=p)
+                test_mechs[name] = {'dir': dir_sk, 'base_name': name,
+                                    'ns': parent.project['mech'][name]['ns'],
+                                    'error_sum': 0}
 
 
+    #Done with pool
+    plot_dir = os.path.join(parent.project['dir_public'],'plots')
+    if not os.path.exists(plot_dir):
+        os.makedirs(plot_dir)
+
+    parent.plotfilenames = []
+    cumulative_errors = {}
     for db_name in list_test:
-        plot_db(parent, db_name, mech_dirs)
+        error_data = plot_db(parent, db_name, test_mechs)
+        for d in error_data:
+            if d in cumulative_errors:
+                for i,ns in enumerate(error_data[d]['x']):
+                    assert(ns == cumulative_errors[d]['x'][i])
+                    cumulative_errors[d]['y'][i] += error_data[d]['y'][i]
+            else:
+                cumulative_errors[d] = error_data[d]
+
+    cumulative_error_plot(parent, cumulative_errors)
+
+    parent.w.menu_postprocessor.setEnabled(True)
 
 
 """ --------------------------------------
@@ -732,6 +776,12 @@ def run_test(parent, progress_signal=None):
     """
                                          
 def tune_single_mech(tune_name, list_db, reactions, parent, dir_mech, bar='tune'):
+
+    dir_tune = os.path.join(dir_mech,'tuning',tune_name)
+    path_yaml = os.path.join(dir_tune,'mech','chem.yaml')
+    if os.path.exists(path_yaml):
+        return
+
     mech_file = os.path.join(dir_mech,'mech','chem.inp')
     therm_file = os.path.join(dir_mech,'mech','therm.dat')
     trans_file = os.path.join(dir_mech,'mech','trans.dat')
@@ -746,7 +796,6 @@ def tune_single_mech(tune_name, list_db, reactions, parent, dir_mech, bar='tune'
     if(not os.path.exists(trans_de)):
         trans_de = None
 
-    dir_tune = os.path.join(dir_mech,'tuning',tune_name)
     if not os.path.exists(dir_tune):
         os.makedirs(dir_tune)
 
@@ -790,6 +839,7 @@ def tune_single_mech(tune_name, list_db, reactions, parent, dir_mech, bar='tune'
                                           procs=1)
                         #TODO: Set from extinction curve if available?
                         app.set('residence_times', [1.0e-4, 1.0e-2, 1.0])
+                        app.set('ignition_temperature', 2500)
 
                     app.set('fuel_mole_fracs', fuel_comp)
                     app.set('oxidizer_mole_fracs', oxid_comp)
@@ -815,8 +865,11 @@ def tune_single_mech(tune_name, list_db, reactions, parent, dir_mech, bar='tune'
                         app.set('inlet_oxidizer_comp', oxid_comp)
                         app.set('initial_comp', oxid_comp)
                         app.set('temperatures',  T0_list)
-                        app.set('pressures',  [101325*p for p in atm_list] )
+                        app.set('pressures',  [1.01325e5*p for p in atm_list] )
                         app.set('phis',  [phi])
+                        app.set('ignition_temperature', 2800)
+                        app.set('initial_inlet_extent', 1.0e-4)
+                        app.set('use_equilibrium_for_init', False)
 
                         moh.add_opt_app(app)
                         nprocs+=1
@@ -824,12 +877,27 @@ def tune_single_mech(tune_name, list_db, reactions, parent, dir_mech, bar='tune'
     moh.nprocs = nprocs
 
     for rxn in reactions:
-        moh.set_rxn_opt(rxn, 2, 100) #Optional A multiplier and Ea delta
+        moh.set_rxn_opt(rxn, A_mult=2, Ea_delta=1000)
 
     parent.progress_stream.write(f"Running tune {tune_name} in: {dir_tune}")
     with contextlib.redirect_stdout(parent.progress_stream), contextlib.redirect_stderr(parent.progress_stream):
         moh.optimize(check_interval=10, method='basinhopping',
                      output_directory=dir_tune)
+
+    #copy opt mech to tune/mech
+    dir_tune_mech = os.path.join(dir_tune,'mech')
+    if not os.path.exists(dir_tune_mech):
+        os.makedirs(dir_tune_mech)
+    opt_mech = os.path.join(dir_tune,'chem.inp_optimized')
+    shutil.copy(opt_mech,os.path.join(dir_tune_mech,'chem.inp'))
+    shutil.copy(therm_file,dir_tune_mech)
+    if(trans_file):
+        shutil.copy(trans_file,dir_tune_mech)
+    ns_txt = os.path.join(dir_mech,'mech','ns.txt')
+    shutil.copy(ns_txt,dir_tune_mech)
+
+    ck2yaml(dir_tune_mech)
+    yaml2ck(dir_tune_mech)
 
     os.chdir(cwd)
 
@@ -855,7 +923,7 @@ def run_tune(parent, progress_signal=None):
         else:
             assert(mech_name[0:3] == "GPS")
             gps_mechs = get_GPS_mechs(parent)
-            dir_mech = gps_mechs[mech_name]
+            dir_mech = gps_mechs[mech_name]['dir']
         tune_single_mech(tune_name, databases, reactions, parent, dir_mech, 'tune')
 
 

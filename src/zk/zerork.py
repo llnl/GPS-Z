@@ -23,8 +23,8 @@ oxidizer_mole_fracs: {{ {OXID_FRACS} }}
 trace_mole_fracs: {{ {TRACE_FRACS} }} #this is just for printing
 temperature_deltas: {TEMPERATURE_DELTAS}
 temperature_print_resolution: {PRINT_RESOLUTION}
-stop_time: 10.0
-print_time: 10.0
+stop_time: 1000.0
+print_time: 1000.0
 relative_tolerance: 1.0e-8
 absolute_tolerance: 1.0e-20
 initial_temperatures: [ {TEMP} ]
@@ -84,6 +84,7 @@ initial_comp: {{ {OXID_FRACS} }}
 pressure: {PRES}
 inlet_temperature: {TEMP}
 inlet_phi: {PHI}
+initial_inlet_extent: 1.0e-4
 
 #Overwritten by flamesolver driver
 Lewis_file: Lewis_file
@@ -92,7 +93,7 @@ restart_file: data_new
 convective_scheme_type: 2
 step_limiter : 1e+300
 simulation_type : 1
-ignition_temperature : 3200
+ignition_temperature : {IGNITION_TEMP}
 max_time: 0.002459115085349798
 stats_dt: 2e-06
 field_dt_multiplier: 55
@@ -107,7 +108,7 @@ num_points: 64
 rel_tol: 1e-08
 abs_tol: 1.0e-20
 ref_temperature: 1000.0
-use_equilibrium_for_init: y
+use_equilibrium_for_init: n
 write_step_rates_to_field_files: y
 write_mole_fractions_to_field_files: y
 """
@@ -137,10 +138,9 @@ def read_zerork_outfile(zerork_out):
     raw['heat_release_rate'] = []
     #TODO: Parsing for sweeps (i.e. run_id != 0)
     nrxn = 0
+    prev_time = np.nan
     for line in zerork_out:
-        if len(line) <= 1:
-            if start_data: break #done with first block break out
-            start_data = False
+        if len(line) == 0:
             continue
         if line[0] != '#':
             start_data = True
@@ -158,9 +158,14 @@ def read_zerork_outfile(zerork_out):
         if start_data:
             try:
                 vals = list(map(float,line.split()))
+                runid = int(line.split()[0])
+                if(runid != 0): break
             except Exception as e:
                 continue
             if(len(vals) < 8): continue
+            #repeated time point (likely due to CVODE error and restart)
+            if(vals[1] == prev_time): continue
+            prev_time = vals[1]
 
             raw['axis0'].append(vals[1])
             raw['temperature'].append(vals[2])
@@ -208,7 +213,6 @@ def read_zerork_flame_restart(restart_file, grid_file):
             nrxn += 1
         elif('NetProductionRate' in field_name):
             break
-
 
     start_mole_fractions=nsp+2
     start_net_rates = start_mole_fractions+nsp
@@ -426,7 +430,6 @@ def zerork_psr(dir_desk, tau, p, T0, fuel_fracs, oxid_fracs, phi, species_names,
     #Clean up
     finally:
         pass
-        #rmtree_retry(tmpdir)
 
     #if(error_return or len(raw['axis0']) == 0):
     #    print(f"Zero-rk failed: {p}, {T0}, {phi}")
@@ -560,7 +563,8 @@ def zerork_premix(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names,
                 PHI=phi,
                 OXID_FRACS=oxid_fracs_str,
                 FUEL_FRACS=fuel_fracs_str,
-                FULL_FRACS=full_fracs_str))
+                FULL_FRACS=full_fracs_str,
+                IGNITION_TEMP=2800))
 
         zerork_out=[]
         env = dict(os.environ)
@@ -568,16 +572,19 @@ def zerork_premix(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names,
         try:
             min_pts_per_lF = 12
             steady = False
-            nprocs = 4
+            nprocs = 1
             nnodes = 1
             cwd = os.getcwd()
             os.chdir(tmpdir)
             #Run flame solver
             compute_unsteady_flame_speeds(zerork_infile_name, [phi], [T0],
-                              [p], [0], nprocs, nnodes, min_pts_per_lF, steady, nprocs_steady=2, mpiexec='srun')
+                              [p], [0], nprocs, nnodes, min_pts_per_lF, steady, nprocs_steady=1, mpiexec='srun')
             #Read in data
             newest = max(glob.iglob('data*'), key=os.path.getctime)
             raw = read_zerork_flame_restart(newest, 'grid_file')
+            flame_speed_data = np.genfromtxt('flame_speeds')
+            flame_speed = flame_speed_data[4]
+            raw['flame_speed'] = [flame_speed]
 
             os.chdir(cwd)
             rmtree_retry(tmpdir)
@@ -597,7 +604,6 @@ def zerork_premix(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_names,
     #Clean up
     finally:
         pass
-        #rmtree_retry(tmpdir)
 
     #if(error_return or len(raw['axis0']) == 0):
     #    print(f"Zero-rk failed: {p}, {T0}, {phi}")
