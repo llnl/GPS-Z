@@ -8,10 +8,10 @@ def ck2yaml(folder):
 
     input_file = os.path.join(folder,'chem.inp')
     thermo_file = os.path.join(folder,'therm.dat')
-    transport_file  = os.path.join(folder,'trans.dat')
-
-    if(not os.path.exists(transport_file)):
-        transport_file = None
+    # N.B. we don't convert the transport file because it 
+    # takes an extremely long time for cantera to parse into
+    # soln for large mechanisms
+    transport_file = None
 
     out_name = os.path.join(folder,"chem.yaml")
 

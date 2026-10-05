@@ -20,7 +20,7 @@ def yaml2ck(folder, soln=None, overwrite=True):
 
     try:
         ctyaml2ck.convert(soln, mechanism_path=mech_file, thermo_path=thermo_file,
-                           transport_path=transport_file, overwrite=overwrite)
+                          transport_path=transport_file, overwrite=overwrite)
     except Exception as e:
         print("Converting cantera solution to chemkin format failed:")
         print(e)
