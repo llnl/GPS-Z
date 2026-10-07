@@ -60,7 +60,9 @@ def auto_ign_plots(parent, db_name, test_mechs):
                                   np.isclose(ign_db[:,2],atm),:]
                     ns = test_mechs[mech_name]['ns']
                     ls = test_mechs[mech_name].get('ls', '-')
-                    axis.semilogy(1000.0/data[:,0], data[:,3], label=f"{mech_name} ({ns} sp)", ls=ls)
+                    axis.semilogy(1000.0/data[:,0], data[:,3],
+                                  label=f"{mech_name} ({ns} sp)",
+                                  ls=ls, marker="o")
                 axis.legend()
                 axis.set_title(f"comp={comp}, phi={phi}, p={atm} atm")
                 axis.set_xlabel('1000 / T [K^-1]')
@@ -179,7 +181,8 @@ def psr_ext_plots(parent, db_name, test_mechs):
 
                             ns = test_mechs[mech_name]['ns']
                             ls = test_mechs[mech_name].get('ls', '-')
-                            axis.semilogx(residence_time, T, label=f"{mech_name} ({ns} sp)", ls=ls)
+                            axis.semilogx(residence_time, T, label=f"{mech_name} ({ns} sp)",
+                                          ls=ls, marker="o")
                         axis.legend()
                         axis.set_title(f"{comp}: phi={phi}, p={atm} atm, T0={T0} K")
                         axis.set_xlabel('tau [s]')
@@ -274,7 +277,8 @@ def premix_plots(parent, db_name, test_mechs):
                                  np.isclose(fs_db[:,2],atm),:]
                     ns = test_mechs[mech_name]['ns']
                     ls = test_mechs[mech_name].get('ls', '-')
-                    axis.plot(data[:,1], data[:,3],  label=f"{mech_name} ({ns} sp)",ls=ls)
+                    axis.plot(data[:,1], data[:,3],  label=f"{mech_name} ({ns} sp)",
+                              ls=ls, marker="o")
                 base_fontsize = 20
                 min_fontsize = 12
                 num_series = len(test_mechs)
