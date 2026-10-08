@@ -69,7 +69,7 @@ def test_est_tau0():
 def Xstr(gas, fuel_dict, phi, oxid_dict):
 
 
-	mech = gas#ct.Solution(mech_file)
+	mech = gas
 	element = mech.element_names
 	species = mech.species
 	reaction = mech.reaction

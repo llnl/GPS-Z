@@ -49,7 +49,7 @@ from .dialog_sensitivity import dialog_sensitivity
 from .dialog_tuning import dialog_tuning
 from .dialog_mech import dialog_mech
 from .dialog_view_mech import dialog_view_mech
-from .def_run_pool import *
+from .def_run import *
 from .dialog_comb_sk import dialog_comb_sk
 
 from src.post.dialog_post import *
@@ -143,7 +143,7 @@ class window_main(common):
 
         # if ctSoln is ok
 
-        OK_soln = (self.soln['detailed'] != None)
+        OK_soln = (self.get_soln('detailed') != None)
         self.w.gb_db.setEnabled(OK_soln)
         self.w.gb_GPS.setEnabled(OK_soln)
         self.w.gb_run.setEnabled(OK_soln)
@@ -293,10 +293,7 @@ class window_main(common):
         return list_mechs
 
     def get_soln(self, mech_name):
-        if(mech_name in self.soln):
-            return self.soln[mech_name]
-
-        list_mechs = self.read_list('mech')
+        list_mechs = self.read_list('mech') + ['detailed']
         if(mech_name in list_mechs):
             dir_desk = self.project['mech'][mech_name]['desk']
             path_yaml = os.path.join(dir_desk,'mech','chem.yaml')
@@ -358,8 +355,6 @@ class window_main(common):
             path_yaml = os.path.join(dir_desk,'mech','chem.yaml')
 
             if os.path.exists(path_yaml):
-                self.soln['detailed'] = ct.Solution(path_yaml)
-                self.soln_in['detailed'] = ct.Solution(path_yaml)
                 if not bool(self.project['mech']['detailed']['chem']):
                     self.project['mech']['detailed']['chem'] = os.path.join(dir_desk,'mech','chem.inp')
                     self.project['mech']['detailed']['therm'] = os.path.join(dir_desk,'mech','therm.dat')
@@ -422,10 +417,6 @@ class window_main(common):
                     return None
 
             del self.project[key][data_name]
-            if key == 'mech':
-                if data_name in self.soln.keys():
-                    del self.soln[data_name]
-                    del self.soln_in[data_name]
 
             set_viewer(key=key)
 
@@ -635,11 +626,6 @@ class window_main(common):
 
     # init ============================
 
-    #def init_iso_default(self):
-    #    if bool(self.project['iso']) == False:
-    #        iso = dict()# default_iso(self.soln['detailed'])
-    #        self.project['iso']['default'] = iso
-
     def init_es_default(self):
         alias_fuel = '!fuel!'
         self.alias_fuel = alias_fuel
@@ -651,7 +637,7 @@ class window_main(common):
         es_e['h'] = {'only_hub':False, 'source':[alias_fuel],'target':['h2o']}
         es_e['!other!'] = {'only_hub':True, 'source':[],'target':[]}    
 
-        soln = self.soln['detailed']
+        soln = self.get_soln('detailed')
         if bool(self.project['es']) == False:
             element = dict()
             for e in soln.element_names:
@@ -687,7 +673,8 @@ class window_main(common):
         self.project['tune'] = dict()
         self.project['mech'] = dict()
         self.project['mech']['detailed'] = {'name':'detailed', 'chem':'',
-                                            'therm':'', 'trans':'', 'desk':''}
+                                            'therm':'', 'trans':'', 'desk':'',
+                                            'ns': ''}
         self.project['es'] = dict()
         self.project['rename'] = dict()
         self.project['version'] = self.version_info
@@ -710,11 +697,6 @@ class window_main(common):
         else:
             self.dir_parent = self.cwd
         self.dir_ui = os.path.join(self.dir_parent,'src','ui')
-
-        self.soln = dict()
-        self.soln_in = dict()
-        self.soln['detailed'] = None
-        self.soln_in['detailed'] = None
 
         self.chr_not_allowed = [chr(92), '/', ':','*','?','"','<','>','|','+']
         self.ign_list = [ 'autoignition', 'autoignition fine', ]

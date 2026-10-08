@@ -113,14 +113,24 @@ write_step_rates_to_field_files: y
 write_mole_fractions_to_field_files: y
 """
 
+
+BASE_PARSER_YML="""
+mech_file: {MECHDIR}/chem.inp
+therm_file: {MECHDIR}/therm.dat
+log_file: {CKFILE}
+"""
+
 ZERORK_EXE="constVolumeWSR.x"
 ZERORK_PSR_EXE="constVolumePSR.x"
 ZERORK_SENS_EXE="constVolumeWSR_TLA.x"
+ZERORK_PARSER_EXE="mechanism_parser.x"
+
 ZERORK_HOME=os.getenv("ZERORK_HOME")
 if( ZERORK_HOME ):
     ZERORK_EXE=os.path.join(ZERORK_HOME, "bin", ZERORK_EXE)
     ZERORK_PSR_EXE=os.path.join(ZERORK_HOME, "bin", ZERORK_PSR_EXE)
     ZERORK_SENS_EXE=os.path.join(ZERORK_HOME, "bin", ZERORK_SENS_EXE)
+    ZERORK_PARSER_EXE=os.path.join(ZERORK_HOME, "bin", ZERORK_PARSER_EXE)
 
 def read_zerork_outfile(zerork_out):
     start_data=False
@@ -260,6 +270,7 @@ def read_zerork_sensitivity_reactions(sens_filename, rxn_equations):
             #ct_rxn = rxn_equations[idx]
             #print(f'"{zk_rxn}", "{ct_rxn}"')
             rxns['equations'].append( rxn_equations[idx] )
+            #rxns['equations'].append( ct_rxn )
     return rxns
 
 
@@ -431,9 +442,9 @@ def zerork_psr(dir_desk, tau, p, T0, fuel_fracs, oxid_fracs, phi, species_names,
     finally:
         pass
 
-    #if(error_return or len(raw['axis0']) == 0):
-    #    print(f"Zero-rk failed: {p}, {T0}, {phi}")
-    #    raise ValueError
+    if(error_return or len(raw['axis0']) == 0):
+        print(f"Zero-rk failed: {p}, {T0}, {phi}")
+        raise ValueError
 
 #    if(raw):
 #        print('n_points = ' + str(len(raw['axis0'])))
@@ -728,6 +739,68 @@ def zerork_sensitivity(dir_desk, atm, T0, fuel_fracs, oxid_fracs, phi, species_n
     #print('CPU time = '+str(time.time() - cpu0))
 
     return reaction_dict
+
+def read_zerork_parser_reactions(zrk_output):
+    reactions_started = False
+    zrk_reactions = []
+    for line in zrk_output:
+        if('n_reactions' in line):
+            reactions_started = True
+            continue
+        if(reactions_started):
+            rxn = line.strip()
+            if(rxn):
+                zrk_reactions.append(rxn)
+    return zrk_reactions
+
+def zerork_parser(dir_desk):
+    zrk_reactions = None
+
+    try:
+        tmpdir = tempfile.mkdtemp(dir=dir_desk)
+        zerork_infile_name = os.path.join(tmpdir,'zerork.yml')
+        with open(zerork_infile_name,'w') as infile:
+            infile.write(BASE_PARSER_YML.format(
+                MECHDIR=os.path.join(dir_desk, 'mech'),
+                CKFILE=os.path.join(tmpdir,'zerork.cklog')
+                ))
+
+        error_return = False
+
+        zerork_out=[]
+        env = dict(os.environ)
+        env["ZERORK_SPLIT_REVERSIBLE_REACTIONS"] = str(1)
+        try:
+            zerork_out=subprocess.check_output([ZERORK_PARSER_EXE,zerork_infile_name],
+                                                stderr=subprocess.STDOUT,universal_newlines=True, env=env).split('\n')
+            zrk_reactions = read_zerork_parser_reactions(zerork_out)
+            rmtree_retry(tmpdir)
+
+        except subprocess.CalledProcessError as e:
+            zerork_out_file=open(os.path.join(tmpdir,'zerork.out'),'a')
+            zerork_out_file.write('!!! Running ZeroRK !!!\n')
+            zerork_out_file.write('!!! Warning: ZeroRK exited with non-zero output ({}).\n'.format(e.returncode))
+            zerork_out=e.output.split('\n')
+            error_return = True
+
+            for line in zerork_out:
+                zerork_out_file.write(line+'\n')
+
+            zerork_out_file.close()
+
+
+    except Exception as e:
+       raise e
+    #Clean up
+    finally:
+        pass
+
+    if(error_return):
+        print(f"Zero-rk Parser failed")
+        raise ValueError
+
+
+    return zrk_reactions
 
 
 if __name__=="__main__":

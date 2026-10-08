@@ -12,18 +12,13 @@ from PyQt5 import uic
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
-from src.core.def_tools import keys_sorted
-from src.ct.ck2yaml_GPS import ck2yaml
-
+from src.ct.def_lwsoln import get_lwsoln
 
 class dialog_view_mech(object):
-
-
 	def set_summary(self):
 		self.w.txt_n_e.setText(': ' + str(self.soln.n_elements))
 		self.w.txt_n_sp.setText(': ' + str(self.soln.n_species))
 		self.w.txt_n_rxn.setText(': ' + str(self.soln.n_reactions))
-
 
 	def set_lists(self):
 		for e in self.soln.element_names:
@@ -36,11 +31,8 @@ class dialog_view_mech(object):
 	def act_ok(self):
 		self.w.accept()
 
-
-
 	# init ============================
 	def __init__(self, parent, data_name=None, btn=None):
-
 		ui_name = 'view_mech.ui'
 		self.parent = parent
 		self.data_name = data_name
@@ -61,11 +53,7 @@ class dialog_view_mech(object):
 			QMessageBox.information(QWidget(),'',msg)
 			return None
 
-		if data_name not in self.parent.soln.keys():
-			self.parent.soln[data_name] = ct.Solution(path_yaml)
-			self.parent.soln_in[data_name] = ct.Solution(path_yaml)
-
-		self.soln = self.parent.soln[data_name]
+		self.soln = get_lwsoln(path_yaml)
 		self.w.txt_name.setText(': '+ data_name)
 		self.set_summary()
 		self.set_lists()
@@ -76,3 +64,4 @@ class dialog_view_mech(object):
 		# exec and return =============================
 
 		self.w.exec_()
+

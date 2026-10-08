@@ -80,7 +80,7 @@ class dialog_rename(common):
 		sp = str(self.w.cb_sp.currentText())
 		s_comp = ''
 		if sp in self.sp_list:
-			comp = self.parent.soln['detailed'].species(sp).composition
+			comp = self.parent.get_soln('detailed').species(sp).composition
 			for e in self.e_list:
 				n = 0
 				if e in comp.keys():
@@ -108,7 +108,7 @@ class dialog_rename(common):
 			self.parent.project['rename'] = dict()
 
 
-		element_names = self.parent.soln['detailed'].element_names
+		element_names = self.parent.get_soln('detailed').element_names
 		self.e_list = ['C','H','O']
 		for e in element_names:
 			e = e.upper()
@@ -128,7 +128,7 @@ class dialog_rename(common):
 
 		# set initial values =============================
 
-		self.sp_list = self.parent.soln['detailed'].species_names
+		self.sp_list = self.parent.get_soln('detailed').species_names
 		for sp in self.sp_list:
 			self.w.cb_sp.addItem(sp)
 

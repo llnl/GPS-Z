@@ -50,7 +50,7 @@ class dialog_GPS_element(object):
 		txt_list = [self.w.txt_source, self.w.txt_target]
 		key_list = ['source', 'target']
 		para_list = key_list
-		soln = self.parent.soln['detailed']
+		soln = self.parent.get_soln('detailed')
 		species = soln.species_names
 		alias_fuel = self.parent.alias_fuel
 		e = self.element['name']
@@ -310,7 +310,7 @@ class dialog_GPS_traced(common):
 		ui_name = 'GPS_traced.ui'
 		self.parent = parent
 		self.key = 'es'
-		soln = self.parent.soln['detailed']
+		soln = self.parent.get_soln('detailed')
 		self.old_name = data_name
 
 		self.occupied = self.init_occupied()

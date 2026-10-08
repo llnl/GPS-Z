@@ -15,7 +15,7 @@ from PyQt5.QtCore import *
 from .def_dialog import common
 from src.core.def_tools import keys_sorted
 from src.ct.ck2yaml_GPS import ck2yaml
-from src.ct.yaml2ck import yaml2ck
+from src.ct.def_lwsoln import get_lwsoln
 
 import os
 
@@ -185,17 +185,6 @@ class dialog_mech(common):
 
             data_name = self.old_name
 
-            if data_name in self.parent.soln.keys():
-                try:
-                    del self.parent.soln[data_name]
-                    del self.parent.soln_in[data_name]
-                except KeyError:
-                    pass
-
-            if self.soln !=None:
-                self.parent.soln[self.data['name']] = self.soln
-                self.parent.soln_in[self.data['name']] = self.soln_in
-
             self.w.accept()
 
 
@@ -224,12 +213,11 @@ class dialog_mech(common):
             self.w.btn_save.setText('setting...')
             self.parent.app.processEvents()
 
-            if ck2yaml(dir_desk_mech) and yaml2ck(dir_desk_mech):
-                path_yaml = os.path.join(dir_desk,'mech','chem.yaml')
-                self.soln = ct.Solution(path_yaml)
-                self.soln_in = ct.Solution(path_yaml)
+            if ck2yaml(dir_desk_mech):
+                path_yaml = os.path.join(dir_desk_mech,'chem.yaml')
+                soln = get_lwsoln(path_yaml)
 
-                n_sp = self.soln.n_species
+                n_sp = soln.n_species
                 f = open(os.path.join(dir_desk_mech,'ns.txt'),'w')
                 f.write(str(n_sp))
                 f.close()
@@ -335,17 +323,8 @@ class dialog_mech(common):
             self.data['ns'] = ''
             self.data['name'] = self.new_name('skeletal', self.occupied)
             self.data['checked'] = True
-            self.soln = None
-            self.soln_in = None
-
         else:
             self.data = copy.copy(self.parent.project['mech'][data_name])
-            if data_name in self.parent.soln.keys():
-                self.soln = self.parent.soln[data_name]
-                self.soln_in = None#copy.deepcopy(self.soln)#self.parent.soln_in[data_name]
-            else:
-                self.soln = None
-                self.soln_in = None
 
 
         self.data_ini = copy.copy(self.data)

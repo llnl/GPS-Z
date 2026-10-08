@@ -17,6 +17,7 @@ class lwreaction(object):
 
 class lwsoln(object):
     def __init__(self, heavy_soln):
+        self.n_elements = heavy_soln.n_elements
         self.element_names = heavy_soln.element_names
 
         self.species_names = heavy_soln.species_names
@@ -48,17 +49,34 @@ class lwsoln(object):
     def reaction_equations(self):
         return self.reaction_equations_list
 
+#We wrap this function with cache
+#so that we only cache successful
+#loads.  
 @cache
-def get_lwsoln(yaml_path):
+def get_lwsoln_inner(yaml_path):
     pfilename = yaml_path+'.p'
+    lws = None
     try:
         with open(pfilename,'rb') as pfile:
             lws = pickle.load(pfile)
     except:
-        soln = ct.Solution(yaml_path)
-        lws = lwsoln(soln)
-        with open(pfilename,'wb') as pfile:
-            pickle.dump(lws, pfile)
-        del soln
+        try:
+            soln = ct.Solution(yaml_path)
+            lws = lwsoln(soln)
+            with open(pfilename,'wb') as pfile:
+                pickle.dump(lws, pfile)
+            del soln
+        except:
+            raise
     return lws
+
+#This function is not cached so if we
+#write the yaml file later we don't
+#get None return on every call
+def get_lwsoln(yaml_path):
+    try:
+        return get_lwsoln_inner(yaml_path)
+    except:
+        return None
+
 

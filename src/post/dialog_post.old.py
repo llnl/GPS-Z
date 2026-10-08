@@ -558,7 +558,7 @@ class dialog_plot_GPedge(base_dialog):
 			os.makedirs(dir_plot)
 		path_save = os.path.join(dir_plot,self.data['name']+'.pdf')
 
-		soln = self.parent.soln['detailed']
+		soln = self.parent.get_soln('detailed')
 		rename = self.parent.project['rename']
 
 
@@ -655,7 +655,7 @@ class dialog_plot_GPedge(base_dialog):
 		self.w_txts['empty'] = [False, False, False, False, True]
 		self.w_txts['len'] = [1, 1, 1, 1, 2]
 
-		soln = self.parent.soln['detailed']
+		soln = self.parent.get_soln('detailed')
 
 		print
 		print('soln.element_names = '+str(soln.element_names))

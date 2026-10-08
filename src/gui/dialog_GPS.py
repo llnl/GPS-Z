@@ -110,7 +110,7 @@ class dialog_GPS(base_dialog):
                 self.init_ui()
                 self.occupied = self.init_occupied()
                 self.init_data()
-                self.sp_list = self.parent.soln['detailed'].species_names
+                self.sp_list = self.parent.get_soln('detailed').species_names
 
                 # set connection ====================
 

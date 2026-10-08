@@ -18,7 +18,8 @@ def ck2yaml(folder):
     try:
         cantera.ck2yaml.convert(input_file, thermo_file=thermo_file,
                                 transport_file=transport_file,
-                                out_name=out_name, permissive=True)
+                                out_name=out_name, permissive=True,
+                                quiet=True)
     except Exception as e:
         print("Converting to chemkin format to cantera yaml failed:")
         print(e)

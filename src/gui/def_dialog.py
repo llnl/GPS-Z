@@ -511,11 +511,6 @@ class base_dialog(common):
 
             if Qanswer == QMessageBox.Yes:
                 del self.parent.project[key][sub_data_name]
-                if key == 'mech':
-                    if sub_data_name in self.parent.soln.keys():
-                        del self.parent.soln[sub_data_name]
-                        del self.parent.soln_in[sub_data_name]
-
                 viewer()
 
         else:

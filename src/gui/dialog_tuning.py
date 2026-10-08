@@ -13,7 +13,7 @@ from PyQt5.QtCore import *
 
 from .def_dialog import common
 from src.core.def_tools import keys_sorted, num2str
-from .def_run_pool import run_sens
+from .def_run import run_sens
 
 class dialog_tuning(common):
 
@@ -265,7 +265,7 @@ class dialog_tuning(common):
 
         self.w.txt_name.setText(self.data['name'])
 
-        self.w.spin_sens_numrxn.setRange(0, 40)
+        self.w.spin_sens_numrxn.setRange(0, 120)
         self.w.spin_sens_numrxn.setValue(0)
 
         #self.act_deft_cust()
