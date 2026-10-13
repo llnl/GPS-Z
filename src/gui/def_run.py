@@ -851,27 +851,28 @@ def tune_single_mech(tune_name, list_db, reactions, parent, dir_mech, bar='tune'
                 if("Premix" in reactor):
                     for phi in phi_list:
                         for T in T0_list:
-                            detailed_data_file=os.path.join(dir_tune, f'app_{db_name}_{fuel_name}_{oxid_name}_phi{phi}_T{T}.dat')
-                            if os.path.isfile(detailed_data_file):
-                                app = premix_opt(comparison_file=detailed_data_file,procs=1)
-                            else:
-                                app = premix_opt(full_mechanism=chem_de,
-                                              full_therm=therm_de,
-                                              full_trans=trans_de,
-                                              save_full=detailed_data_file,
-                                              procs=1)
-                            app.set('inlet_fuel_comp', fuel_comp)
-                            app.set('inlet_oxidizer_comp', oxid_comp)
-                            app.set('initial_comp', oxid_comp)
-                            app.set('temperatures',  [T])
-                            app.set('pressures',  [1.01325e5*p for p in atm_list] )
-                            app.set('phis',  [phi])
-                            app.set('ignition_temperature', 2800)
-                            app.set('initial_inlet_extent', 1.0e-4)
-                            app.set('use_equilibrium_for_init', False)
+                            for p in atm_list:
+                                detailed_data_file=os.path.join(dir_tune, f'app_{db_name}_{fuel_name}_{oxid_name}_phi{phi}_T{T}_p{p}.dat')
+                                if os.path.isfile(detailed_data_file):
+                                    app = premix_opt(comparison_file=detailed_data_file,procs=1)
+                                else:
+                                    app = premix_opt(full_mechanism=chem_de,
+                                                  full_therm=therm_de,
+                                                  full_trans=trans_de,
+                                                  save_full=detailed_data_file,
+                                                  procs=1)
+                                app.set('inlet_fuel_comp', fuel_comp)
+                                app.set('inlet_oxidizer_comp', oxid_comp)
+                                app.set('initial_comp', oxid_comp)
+                                app.set('temperatures',  [T])
+                                app.set('pressures',  [1.01325e5*p] )
+                                app.set('phis',  [phi])
+                                app.set('ignition_temperature', 2800)
+                                app.set('initial_inlet_extent', 1.0e-4)
+                                app.set('use_equilibrium_for_init', False)
 
-                            moh.add_opt_app(app)
-                            nprocs+=1
+                                moh.add_opt_app(app)
+                                nprocs+=1
 
     moh.nprocs = nprocs
 
