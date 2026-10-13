@@ -1,0 +1,12 @@
+Model from:
+
+Y. Murakami, Q.-D. Wang, S. Liu, Y. Zhu, P. Wang, L.P. Maffei, R. Langer,
+T. Faravelli, H. Pitsch, S.J. Klippenstein, J. Bergthorson, G. Bourque,
+S. Wagnon, P.K. Senecal, H. Curran, "C3MechLite: An integrated component
+library of compact kinetic mechanisms for low-carbon, carbon neutral and
+zero-carbon fuels," Combust. Flame 282 (2025) 114410.
+https://doi.org/10.1016/j.combustflame.2025.114410
+
+Mechanism file from:
+SM-c/Cantera/Source/C3MechLite_H2-CH4_38sp.MECH
+

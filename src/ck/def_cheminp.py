@@ -18,11 +18,11 @@ def skeletal(detailed_folder, sk_folder, species_kept, notes=None):
 
 	if detailed_folder != sk_folder:
 		shutil.copyfile(os.path.join(detailed_folder,'therm.dat'), os.path.join(sk_folder,'therm.dat'))
-	trandat = os.path.join(detailed_folder,'tran.dat')
+	trandat = os.path.join(detailed_folder,'trans.dat')
 	try:
 		ft = open(trandat,'r')
 		ft.close()
-		shutil.copyfile(trandat, os.path.join(sk_folder,'tran.dat'))
+		shutil.copyfile(trandat, os.path.join(sk_folder,'trans.dat'))
 	except IOError:
 		pass
 

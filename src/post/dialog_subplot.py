@@ -483,7 +483,7 @@ class dialog_plot_sp(base_dialog):
 		self.occupied = self.init_occupied()
 		self.init_data()
 
-		self.sp_list = self.parent.soln['detailed'].species_names		
+		self.sp_list = self.parent.get_soln('detailed').species_names		
 
 		# set connection ====================
 
@@ -913,7 +913,7 @@ class dialog_plot_GP(base_dialog):
 		self.data['method'] = ''
 		self.data['feature_name'] = 'global pathway'
 
-		for e in self.parent.soln['detailed'].element_names:
+		for e in self.parent.get_soln('detailed').element_names:
 			key = 'GP_' + e
 			self.data[key] = []
 			if key not in self.parent.project.keys():
@@ -957,7 +957,7 @@ class dialog_plot_GP(base_dialog):
 		self.w_cbs['items'] = [
 			['D_GP','R_GP production','R_GP consumption','normR_GP production', 'normR_GP consumption'],#'oldD_GP','oldR_GP production','oldR_GP consumption'],
 			[str(v) for v in db['phi']],
-			self.parent.soln['detailed'].element_names,
+			self.parent.get_soln('detailed').element_names,
 			]
 
 
@@ -1068,8 +1068,8 @@ class dialog_plot_node(base_dialog):
 
 		self.w_cbs['items'] = [
 			[str(v) for v in db['phi']],
-			self.parent.soln['detailed'].element_names,
-			self.parent.soln['detailed'].species_names,
+			self.parent.get_soln('detailed').element_names,
+			self.parent.get_soln('detailed').species_names,
 			]
 
 		# set ui obj ==============================
@@ -1349,7 +1349,7 @@ class dialog_plot_GPrxn(base_dialog):
 		db = self.parent.project['database'][self.extra['db']['db_name']]
 		self.w_cbs['items'] = [
 			[str(v) for v in db['phi']],
-			self.parent.soln['detailed'].element_names,
+			self.parent.get_soln('detailed').element_names,
 			['production','consumption']
 			]
 

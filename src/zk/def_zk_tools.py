@@ -250,6 +250,9 @@ def save_raw_csv(raw, species_names, reaction_equations, dir_csv):
 	if 'speed' in raw.keys():
 		np.savetxt(os.path.join(dir_csv,'speed.csv'), raw['speed'], delimiter=',')
 
+	if 'flame_speed' in raw.keys():
+		np.savetxt(os.path.join(dir_csv,'flame_speed.csv'), raw['flame_speed'], delimiter=',')
+
 	f = open(os.path.join(dir_csv,'species_list.csv'),'w')
 	for sp in species_names:
 		f.write(sp+'\n')

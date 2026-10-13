@@ -1,0 +1,9 @@
+Model from:
+
+R. Xu, S.S. Dammati, X. Shi, E.S. Genter, Z. Jozefik, M.E. Harvazinski, T. Lu,
+A.Y. Poludnenko, V. Sankaran, A.R. Kerstein, H. Wang, "Modeling of high-speed,
+methane-air, turbulent combustion, Part II: Reduced methane oxidation chemistry,
+Combust. Flame 263 (2024) 113380.
+https://doi.org/10.1016/j.combustflame.2024.113380
+
+Converted from cti format to chemkin with Cantera 3.1.0

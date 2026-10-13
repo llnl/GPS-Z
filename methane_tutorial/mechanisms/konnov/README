@@ -1,0 +1,12 @@
+Model from:
+
+A.A. Konnov, "Implementation of the NCN pathway of prompt-NO formation
+in the detailed reaction mechanism", Combust. Flame 156 (2009) 2093-2105.
+https://doi.org/10.1016/j.combustflame.2009.03.016
+
+with following modifications:
+
+(1) Remove unupported keyword in REACTIONS line in mechanism file
+(2) Reformat ELEM block
+(3) Refit thermodynamic data to eliminate discontinuities
+
