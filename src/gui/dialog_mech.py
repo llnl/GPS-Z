@@ -1,6 +1,5 @@
 
 import sys, copy
-from PyQt5.QtWidgets import *
 import os
 import cantera as ct
 import json
@@ -9,12 +8,14 @@ import shutil
 import copy
 
 from PyQt5 import uic
+from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
 from .def_dialog import common
 from src.core.def_tools import keys_sorted
 from src.ct.ck2yaml_GPS import ck2yaml
+from src.ct.def_lwsoln import get_lwsoln
 
 import os
 
@@ -23,37 +24,37 @@ import os
 
 def fun_cleanck(dir_desk_mech):
 
-	# ========= chem.inp ====================
+    # ========= chem.inp ====================
 
-	p0 = os.path.join(dir_desk_mech,'chem0.inp')
-	f0 = open(p0,'r')
-	f = open(os.path.join(dir_desk_mech,'chem.inp'),'w')
+    p0 = os.path.join(dir_desk_mech,'chem0.inp')
+    f0 = open(p0,'r')
+    f = open(os.path.join(dir_desk_mech,'chem.inp'),'w')
 
-	for ln0 in f0:
-		ln = ln0
-		if 'TROE' in ln.upper() or 'LOW' in ln.upper():
-			ln = ln.replace(',',' ')
+    for ln0 in f0:
+        ln = ln0
+        if 'TROE' in ln.upper() or 'LOW' in ln.upper():
+            ln = ln.replace(',',' ')
 
-		f.write(ln)
+        f.write(ln)
 
-	f.close()
-	f0.close()
-	os.remove(p0)
+    f.close()
+    f0.close()
+    os.remove(p0)
 
 
-	# ========= chem.inp ====================
+    # ========= chem.inp ====================
 
-	p0 = os.path.join(dir_desk_mech,'therm0.dat')
-	f0 = open(p0,'r')
-	f = open(os.path.join(dir_desk_mech,'therm.dat'),'w')
+    p0 = os.path.join(dir_desk_mech,'therm0.dat')
+    f0 = open(p0,'r')
+    f = open(os.path.join(dir_desk_mech,'therm.dat'),'w')
 
-	for ln0 in f0:
-		ln = ln0.rstrip()
-		f.write(ln+'\n')
+    for ln0 in f0:
+        ln = ln0.rstrip()
+        f.write(ln+'\n')
 
-	f.close()
-	f0.close()
-	os.remove(p0)
+    f.close()
+    f0.close()
+    os.remove(p0)
 
 
 
@@ -64,260 +65,287 @@ def fun_cleanck(dir_desk_mech):
 
 class dialog_mech(common):
 
-	""" >>>>>>>>>>>>>------------------------------------------------
-	0.2. dialog_mech
-	     called by: window_main
-	"""
+    """ >>>>>>>>>>>>>------------------------------------------------
+    0.2. dialog_mech
+         called by: window_main
+    """
 
 
 
-	# read ============================
+    # read ============================
 
 
-	def read_path(self):
-		txt_list = [self.w.txt_desk, self.w.txt_chem, self.w.txt_therm]
-		key_list = ['desk','chem', 'therm']
-		para_list = ['folder', 'gas-phase kinetic file', 'thermodynamics data file']
+    def read_path(self):
+        txt_list = [self.w.txt_chem, self.w.txt_therm, self.w.txt_trans]
+        key_list = ['chem', 'therm', 'trans']
+        para_list = ['gas-phase kinetic file', 'thermodynamics data file', 'transport data file']
+
+        for i_txt in range(len(txt_list)):
+            txt = txt_list[i_txt]
+            key = key_list[i_txt]
+            para = para_list[i_txt]
+            ss = str(txt.text())
 
-		for i_txt in range(len(txt_list)):
-			txt = txt_list[i_txt]
-			key = key_list[i_txt]
-			para = para_list[i_txt]
-			ss = str(txt.text())
+            if bool(ss):
+                self.data[key] = ss
+            elif key == "chem":
+                msg = para + ' not provided'
+                QMessageBox.information(QWidget(),'',msg)
+                return False
 
-			if bool(ss):
-				self.data[key] = ss
-			elif key != "therm":
-				msg = para + ' not provided'
-				QMessageBox.information(QWidget(),'',msg)
-				return False
+        return True
 
-		return True
 
 
+    # acts ============================
 
-	# acts ============================
 
+    def act_ns(self):
+        dir_desk = self.data['desk']
+        path_ns = os.path.join(dir_desk,'mech','ns.txt')
 
-	def act_ns(self):
-		dir_desk = str(self.w.txt_desk.text())
-		path_ns = os.path.join(dir_desk,'mech','ns.txt')
+        if os.path.exists(path_ns):
+            f = open(path_ns,'r')
+            n_sp = f.read()
+            self.w.txt_ns.setText(n_sp)
+            f.close()
+        else:
+            self.w.txt_ns.setText('...')
 
-		if os.path.exists(path_ns):
-			f = open(path_ns,'r')
-			n_sp = f.read()
-			self.w.txt_ns.setText(n_sp)
-			f.close()
-		else:
-			self.w.txt_ns.setText('...')
 
+    def act_path_chem(self):
+        therm_str = str(self.w.txt_therm.text())
+        trans_str = str(self.w.txt_trans.text())
+        if bool(self.data['chem']):
+            path_ini = self.data['chem']
+        elif bool(therm_str):
+            path_ini = os.path.dirname(therm_str)
+        elif bool(trans_str):
+            path_ini = os.path.dirname(trans_str)
+        else:
+            path_ini = self.parent.project['dir_public']
 
+        path_chem = QFileDialog.getOpenFileName(self.w, 'Open File', path_ini)[0]
+        if bool(path_chem):
+            self.w.txt_chem.setText(path_chem)
 
-	def act_desk(self):
-		dir_public = str(self.parent.w.txt_dir.text())
-		dir_desk = str(QFileDialog.getExistingDirectory(self.w, '', dir_public))
-		if bool(dir_desk):
-			if dir_desk[-5:] == '/mech':
-				dir_desk = dir_desk[:-5]
-			self.w.txt_desk.setText(dir_desk)
-			self.act_ns()
 
-			if bool(str(self.w.txt_therm.text())) == False:
-				therm_str = os.path.join(dir_desk,'mech','therm.dat')
-				if os.path.exists(therm_str):
-					self.w.txt_therm.setText(therm_str)
+    def act_path_therm(self):
+        chem_str = str(self.w.txt_chem.text())
+        trans_str = str(self.w.txt_trans.text())
+        if bool(self.data['therm']):
+            path_ini = self.data['therm']
+        elif bool(chem_str):
+            path_ini = os.path.dirname(chem_str)
+        elif bool(trans_str):
+            path_ini = os.path.dirname(trans_str)
+        else:
+            path_ini = self.parent.project['dir_public']
 
-			if bool(str(self.w.txt_chem.text())) == False:
-				chem_str = os.path.join(dir_desk,'mech','chem.inp')
-				if os.path.exists(chem_str):
-					self.w.txt_chem.setText(chem_str)
+        path_therm = QFileDialog.getOpenFileName(self.w, 'Open File', path_ini)[0]
+        if bool(path_therm):
+            self.w.txt_therm.setText(path_therm)
 
+    def act_path_trans(self):
+        chem_str = str(self.w.txt_chem.text())
+        therm_str = str(self.w.txt_therm.text())
+        if bool(self.data['trans']):
+            path_ini = self.data['trans']
+        elif bool(chem_str):
+            path_ini = os.path.dirname(chem_str)
+        elif bool(therm_str):
+            path_ini = os.path.dirname(therm_str)
+        else:
+            path_ini = self.parent.project['dir_public']
 
+        path_trans = QFileDialog.getOpenFileName(self.w, 'Open File', path_ini)[0]
+        if bool(path_trans):
+            self.w.txt_trans.setText(path_trans)
 
-	def act_path_chem(self):
-		therm_str = str(self.w.txt_therm.text())
-		dir_desk = str(self.w.txt_desk.text())
-		if bool(self.data['chem']):
-			path_ini = self.data['chem']
-		elif bool(therm_str):
-			path_ini = os.path.dirname(therm_str)
-		elif bool(dir_desk):
-			path_ini = dir_desk
-		else:
-			path_ini = self.parent.project['dir_public']
 
-		path_chem = QFileDialog.getOpenFileName(self.w, 'Open File', path_ini)[0]
-		if bool(path_chem):
-			self.w.txt_chem.setText(path_chem)
+    def act_cancel(self):
+        self.w.reject()
 
 
-	def act_path_therm(self):
-		chem_str = str(self.w.txt_chem.text())
-		dir_desk = str(self.w.txt_desk.text())
-		if bool(self.data['therm']):
-			path_ini = self.data['therm']
-		elif bool(chem_str):
-			path_ini = os.path.dirname(chem_str)
-		elif bool(dir_desk):
-			path_ini = dir_desk
-		else:
-			path_ini = self.parent.project['dir_public']
+    def act_save(self):
 
-		path_therm = QFileDialog.getOpenFileName(self.w, 'Open File', path_ini)[0]
-		if bool(path_therm):
-			self.w.txt_therm.setText(path_therm)
+        if self.read_name() and self.read_path():
+            dir_desk = os.path.join(self.parent.project['dir_public'], self.data['name'])
+            path_yaml = os.path.join(dir_desk,'mech','chem.yaml')
+            self.data['desk'] = dir_desk
 
-	def act_cancel(self):
-		self.w.reject()
+            if  self.data['chem'] != self.data_ini['chem'] or \
+                self.data['therm'] != self.data_ini['therm'] or \
+                self.data['trans'] != self.data_ini['trans'] or \
+                self.data['desk'] != self.data_ini['desk'] or \
+                (not os.path.exists(path_yaml)):
 
+                if self.act_set() == False:
+                    return None
 
-	def act_save(self):
+            data_name = self.old_name
 
-		if self.read_name() and self.read_path():
+            self.w.accept()
 
-			dir_desk = self.data['desk']
-			path_yaml = os.path.join(dir_desk,'mech','chem.yaml')
 
-			if  self.data['chem'] != self.data_ini['chem'] or \
-				self.data['therm'] != self.data_ini['therm'] or \
-				self.data['desk'] != self.data_ini['desk'] or \
-				(not os.path.exists(path_yaml)):
+    def act_set(self):
 
-				if self.act_set() == False:
-					return None
+        if self.read_path():
+            dir_desk = self.data['desk']
+            dir_desk_mech = os.path.join(dir_desk,'mech')
 
-			data_name = self.old_name
+            if not os.path.exists(dir_desk_mech):
+                os.makedirs(dir_desk_mech)
 
-			if data_name in self.parent.soln.keys():
-				try:
-					del self.parent.soln[data_name]
-					del self.parent.soln_in[data_name]
-				except KeyError:
-					pass
 
-			if self.soln !=None:
-				self.parent.soln[self.data['name']] = self.soln
-				self.parent.soln_in[self.data['name']] = self.soln_in
+            shutil.copy(self.data['chem'],os.path.join(dir_desk_mech,'chem0.inp'))
+            if(self.data['therm']):
+                shutil.copy(self.data['therm'],os.path.join(dir_desk_mech,'therm0.dat'))
+            else:
+                with open(os.path.join(dir_desk_mech,'therm0.dat'), 'a'):
+                    pass
 
-			self.w.accept()
+            if(self.data['trans']):
+                shutil.copy(self.data['trans'],os.path.join(dir_desk_mech,'trans.dat'))
+            fun_cleanck(dir_desk_mech)
 
+            self.w.btn_save.setEnabled(False)
+            self.w.btn_save.setText('setting...')
+            self.parent.app.processEvents()
 
+            if ck2yaml(dir_desk_mech):
+                path_yaml = os.path.join(dir_desk_mech,'chem.yaml')
+                soln = get_lwsoln(path_yaml)
 
+                n_sp = soln.n_species
+                f = open(os.path.join(dir_desk_mech,'ns.txt'),'w')
+                f.write(str(n_sp))
+                f.close()
 
-	def act_set(self):
+                self.data['ns'] = n_sp
 
-		if self.read_path():
-			dir_desk = self.data['desk']
-			path_yaml = os.path.join(dir_desk,'mech','chem.yaml')
-			if not os.path.exists(path_yaml):
+                self.act_ns()
 
-				dir_desk = self.data['desk']
-				dir_desk_mech = os.path.join(dir_desk,'mech')
-				path_yaml = os.path.join(dir_desk_mech,'chem.yaml')
+                self.w.btn_save.setEnabled(True)
+                self.w.btn_save.setText('save')
+                self.parent.app.processEvents()    
+                return True
+            else:
+                return False
 
-				if not os.path.exists(dir_desk_mech):
-					os.makedirs(dir_desk_mech)
+        else:
+            return False
 
-				shutil.copy(self.data['chem'],os.path.join(dir_desk_mech,'chem0.inp'))
-				if(self.data['therm']):
-					shutil.copy(self.data['therm'],os.path.join(dir_desk_mech,'therm0.dat'))
-				else:
-					with open(os.path.join(dir_desk_mech,'therm0.dat'), 'a'):
-						pass
-				fun_cleanck(dir_desk_mech)
 
-				self.w.btn_save.setEnabled(False)
-				self.w.btn_save.setText('setting...')
-				self.parent.app.processEvents()
 
-				if ck2yaml(dir_desk_mech):
-					self.no_set = False
-					self.soln = ct.Solution(path_yaml)
-					self.soln_in = ct.Solution(path_yaml)
 
-					n_sp = self.soln.n_species
-					f = open(os.path.join(dir_desk_mech,'ns.txt'),'w')
-					f.write(str(n_sp))
-					f.close()
 
-					self.act_ns()
+    # init ============================
 
-					self.w.btn_save.setEnabled(True)
-					self.w.btn_save.setText('save')
-					self.parent.app.processEvents()	
-					return True
 
-		else:
-			return False
 
+    def __init__(self, parent, data_name=None, extra=None):
 
+        self.parent = parent
+        self.key = 'mech'
+        self.old_name = data_name
+        self.occupied = self.init_occupied() + ['PFA','GPS','detailed']
 
+        # load ui and set connection ====================
 
+        self.w = QDialog()
+        outer_layout = QFormLayout()
+        self.w.txt_name = QLineEdit()
+        outer_layout.addRow(QLabel("name"), self.w.txt_name)
 
-	# init ============================
+        self.w.txt_ns = QLabel("...")
+        outer_layout.addRow(QLabel("number of species:"),self.w.txt_ns) 
 
+        outer_layout.addRow(QLabel("gas-phase kinetic file"))
 
+        hbox_chem = QHBoxLayout()
+        self.w.txt_chem = QLineEdit()
+        self.w.txt_chem.setReadOnly(True)
 
-	def __init__(self, parent, data_name=None):
+        self.w.btn_path_chem = QPushButton("...")
+        hbox_chem.addWidget(self.w.txt_chem)
+        hbox_chem.addWidget(self.w.btn_path_chem,stretch=0)
+        outer_layout.addRow(hbox_chem)
 
-		ui_name = 'mech.ui'
-		self.parent = parent
-		self.key = 'mech'
-		self.old_name = data_name
-		self.occupied = self.init_occupied() + ['PFA','GPS','detailed']
+        outer_layout.addRow(QLabel("thermodynamics file"))
 
-		# load ui and set connection ====================
+        hbox_therm = QHBoxLayout()
+        self.w.txt_therm = QLineEdit()
+        self.w.txt_therm.setReadOnly(True)
+        self.w.btn_path_therm = QPushButton("...")
+        hbox_therm.addWidget(self.w.txt_therm)
+        hbox_therm.addWidget(self.w.btn_path_therm,stretch=0)
+        outer_layout.addRow(hbox_therm)
 
-		self.w = uic.loadUi(os.path.join(parent.dir_ui, ui_name))
-		self.w.btn_desk.clicked.connect(self.act_desk)
-		self.w.btn_path_chem.clicked.connect(self.act_path_chem)
-		self.w.btn_path_therm.clicked.connect(self.act_path_therm)
-		self.w.btn_cancel.clicked.connect(self.act_cancel)
-		self.w.btn_save.clicked.connect(self.act_save)
+        outer_layout.addRow(QLabel("transport file"))
+        hbox_trans = QHBoxLayout()
+        self.w.txt_trans = QLineEdit()
+        self.w.txt_trans.setReadOnly(True)
+        self.w.btn_path_trans = QPushButton("...")
+        hbox_trans.addWidget(self.w.txt_trans)
+        hbox_trans.addWidget(self.w.btn_path_trans,stretch=0)
+        outer_layout.addRow(hbox_trans)
 
-		
+        hbox = QHBoxLayout()
+        hbox.addStretch()
+        self.w.btn_cancel = QPushButton("cancel")
+        self.w.btn_save = QPushButton("save")
+        hbox.addWidget(self.w.btn_cancel)
+        hbox.addWidget(self.w.btn_save)
+        outer_layout.addRow(hbox)
 
-		# set initial values =============================
-		
-		if data_name is None:
-			self.data = dict()
-			self.data['desk'] = ''
-			self.data['chem'] = ''
-			self.data['therm'] = ''
-			self.data['name'] = self.new_name('skeletal', self.occupied)
-			self.data['checked'] = True
-			self.soln = None
-			self.soln_in = None
+        self.w.setLayout(outer_layout)
+        self.w.setWindowTitle("mech")
+        self.w.resize(600, 250)
 
-		else:
-			self.data = copy.copy(self.parent.project['mech'][data_name])
-			if data_name in self.parent.soln.keys():
-				self.soln = self.parent.soln[data_name]
-				self.soln_in = None#copy.deepcopy(self.soln)#self.parent.soln_in[data_name]
-			else:
-				self.soln = None
-				self.soln_in = None
 
+        self.w.btn_path_chem.clicked.connect(self.act_path_chem)
+        self.w.btn_path_therm.clicked.connect(self.act_path_therm)
+        self.w.btn_path_trans.clicked.connect(self.act_path_trans)
+        self.w.btn_cancel.clicked.connect(self.act_cancel)
+        self.w.btn_save.clicked.connect(self.act_save)
 
-		self.data_ini = copy.copy(self.data)
-		self.no_set = True
+        
 
-		self.w.txt_name.setText(self.data['name'])
-		self.w.txt_desk.setText(self.data['desk'])
-		self.w.txt_chem.setText(self.data['chem'])
-		self.w.txt_therm.setText(self.data['therm'])
-		self.act_ns()
+        # set initial values =============================
+        
+        if data_name is None:
+            self.data = dict()
+            self.data['desk'] = ''
+            self.data['chem'] = ''
+            self.data['therm'] = ''
+            self.data['trans'] = ''
+            self.data['ns'] = ''
+            self.data['name'] = self.new_name('skeletal', self.occupied)
+            self.data['checked'] = True
+        else:
+            self.data = copy.copy(self.parent.project['mech'][data_name])
 
-		if data_name == 'detailed':
-			self.w.txt_name.setReadOnly(True)
-			dir_de = os.path.join(self.parent.project['dir_public'],'detailed')
-			self.w.txt_desk.setText(dir_de)
-			self.w.btn_desk.setEnabled(False)
 
+        self.data_ini = copy.copy(self.data)
 
-		# exec and return =============================
+        self.w.txt_name.setText(self.data['name'])
+        #self.w.txt_desk.setText(self.data['desk'])
+        self.w.txt_chem.setText(self.data['chem'])
+        self.w.txt_therm.setText(self.data['therm'])
+        self.w.txt_trans.setText(self.data['trans'])
+        self.act_ns()
 
-		if self.w.exec_() == QDialog.Rejected:
-			self.data = None
+        if data_name == 'detailed':
+            self.w.txt_name.setReadOnly(True)
+            #dir_de = os.path.join(self.parent.project['dir_public'],'detailed')
+            #self.w.txt_desk.setText(dir_de)
+            #self.w.btn_desk.setEnabled(False)
+
+
+        # exec and return =============================
+
+        if self.w.exec_() == QDialog.Rejected:
+            self.data = None
 
 

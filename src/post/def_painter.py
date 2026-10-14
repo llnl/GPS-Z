@@ -101,7 +101,7 @@ def	find_node_edges(dir_raw, node, extra):
 
 def	find_Rrop(dir_raw, n_rxn, role, parent, sample):
 
-	soln = parent.soln['detailed']
+	soln = parent.get_soln('detailed')
 
 	dir_desk = parent.project['mech']['detailed']['desk']
 	path_R_npz = os.path.join(dir_desk,'mech','radical.npz')
@@ -516,16 +516,7 @@ def painter(parent, fig_opt, sub_opt, ax, tp):
 	for i_mech in range(len(fig_opt['mech'])):
 		mech = fig_opt['mech'][i_mech]
 		dir_desk = parent.project['mech'][mech]['desk']
-
-		if mech == 'detailed':
-			soln = parent.soln['detailed']
-		else:
-			if mech in parent.soln.keys():
-				soln = parent.soln[mech]
-			else:
-				path_yaml = os.path.join(dir_desk,'mech','chem.yaml')
-				soln = ct.Solution(path_yaml)
-				parent.soln[mech] = ct.Solution(path_yaml)
+		soln = parent.get_soln(mech)
 
 		
 		# ========================================

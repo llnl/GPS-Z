@@ -16,31 +16,10 @@
   <layout class="QGridLayout" name="gridLayout_2">
    <item row="0" column="0">
     <layout class="QGridLayout" name="gridLayout">
-     <item row="1" column="2">
-      <widget class="QProgressBar" name="bar_GPS">
-       <property name="value">
-        <number>0</number>
-       </property>
-      </widget>
-     </item>
      <item row="0" column="0">
       <widget class="QLabel" name="label">
        <property name="text">
         <string>training</string>
-       </property>
-      </widget>
-     </item>
-     <item row="2" column="2">
-      <widget class="QProgressBar" name="bar_test">
-       <property name="value">
-        <number>0</number>
-       </property>
-      </widget>
-     </item>
-     <item row="1" column="0">
-      <widget class="QLabel" name="label_GPS">
-       <property name="text">
-        <string>GPS    </string>
        </property>
       </widget>
      </item>
@@ -54,10 +33,59 @@
        </property>
       </widget>
      </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="label_GPS">
+       <property name="text">
+        <string>GPS    </string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="2">
+      <widget class="QProgressBar" name="bar_GPS">
+       <property name="value">
+        <number>0</number>
+       </property>
+      </widget>
+     </item>
      <item row="2" column="0">
+      <widget class="QLabel" name="label_sensitivity">
+       <property name="text">
+        <string>sensitivity</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="2">
+      <widget class="QProgressBar" name="bar_sensitivity">
+       <property name="value">
+        <number>0</number>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="0">
+      <widget class="QLabel" name="label_tuning">
+       <property name="text">
+        <string>tuning</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="2">
+      <widget class="QProgressBar" name="bar_tuning">
+       <property name="value">
+        <number>0</number>
+       </property>
+      </widget>
+     </item>
+     <item row="4" column="0">
       <widget class="QLabel" name="label_test">
        <property name="text">
-        <string>testing                              </string>
+        <string>testing</string>
+       </property>
+      </widget>
+     </item>
+     <item row="4" column="2">
+      <widget class="QProgressBar" name="bar_test">
+       <property name="value">
+        <number>0</number>
        </property>
       </widget>
      </item>
@@ -81,8 +109,16 @@
     </layout>
    </item>
    <item row="2" column="0">
-    <layout class="QHBoxLayout" name="horizontalLayout_3">
-     <item>
+      <widget class="QLabel" name="lbl_status">
+       <property name="visible">
+         <bool>false</bool>
+       </property> 
+      </widget>
+   </item>
+   <item row="3" column="0">
+     <layout class="QHBoxLayout" name="horizontalLayout_3">
+
+  <!--  <item>
       <widget class="QPushButton" name="btn_verbose">
        <property name="text">
         <string>verbose</string>
@@ -91,7 +127,7 @@
         <bool>false</bool>
        </property>
       </widget>
-     </item>
+     </item> -->
      <item>
       <spacer name="horizontalSpacer">
        <property name="orientation">
